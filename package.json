@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "seed": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1111.0",
@@ -27,6 +28,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.1",
     "fast-check": "^4.9.0",
+    "tsx": "^4.23.12",
     "typescript": "5.9.3",
     "vitest": "^4.1.10"
   }
