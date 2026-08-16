@@ -294,8 +294,8 @@ export interface QuizResponse {
  *
  * `topicMastery` maps a `topicId` to a Topic_Mastery percentage rounded half-up
  * to the nearest integer; `weakTopics` holds the topicIds below 60 percent.
- * `guidanceMode` is `unavailable` when next-step guidance entered Fallback_Mode,
- * in which case the computed numbers are still returned (Req 12.6).
+ * `guidanceMode` is `omitted` when next-step guidance could not be generated, in
+ * which case the computed numbers and links are still returned (Req 12.6).
  */
 export interface UnderstandingReport {
   learnerId: string;
@@ -305,7 +305,7 @@ export interface UnderstandingReport {
   /** Null when no Quiz_Response was correct. */
   highestCorrectDifficulty: DifficultyLevel | null;
   guidance: string[];
-  guidanceMode: "generated" | "unavailable";
+  guidanceMode: "generated" | "omitted";
 }
 
 // ---------------------------------------------------------------------------
