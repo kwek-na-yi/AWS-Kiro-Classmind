@@ -231,7 +231,13 @@ function compose(
       const artefact = buildArtefact(topic, sentences);
 
       return {
-        body: `${label}\n${truncateWords(prose, 120)}`,
+        // The section *is* the structured artefact, with the prose form carried
+        // alongside it. Leading with prose here would make this style read
+        // identically to Detailed and leave the table as decoration.
+        body:
+          artefact.kind === "none"
+            ? `${label}\n${prose}`
+            : `${label}\n${artefact.content}`,
         proseBody: prose,
         artefact,
         styleWarning:

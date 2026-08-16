@@ -182,7 +182,9 @@ describe("Property 14: identifier absence", () => {
   const taintArb = fc.record({
     learnerId: fc.string({ minLength: 8, maxLength: 20 }).map((s) => `learner-${s}`),
     displayName: fc.string({ minLength: 3, maxLength: 20 }).map((s) => `Name ${s}`),
-    submittedAt: fc.date().map((d) => d.toISOString()),
+    // `noInvalidDate` — an unconstrained `fc.date()` can generate NaN time,
+    // which throws on `toISOString` and made this test seed-dependent.
+    submittedAt: fc.date({ noInvalidDate: true }).map((d) => d.toISOString()),
   });
 
   it("lets no Learner_Id, Display_Name or timestamp through the map projection", () => {

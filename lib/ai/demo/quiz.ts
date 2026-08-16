@@ -95,6 +95,41 @@ function otherTopics(topics: readonly QuizTopic[], current: QuizTopic): QuizTopi
   });
 }
 
+/**
+ * Candidate distractor sentences drawn from Topics other than this one.
+ *
+ * A lecture often has only three Topics, which would yield just two distractors
+ * if each Topic contributed one — one short of a four-option item, so no item
+ * could be built at all. Each other Topic therefore contributes several
+ * sentences, taken round-robin so the distractors still spread across Topics
+ * rather than all coming from the next one.
+ *
+ * Sentences from *this* Topic are never used: for "which statement does the
+ * material make about X", another true statement about X would be a second
+ * correct answer.
+ */
+function foreignSentences(
+  topics: readonly QuizTopic[],
+  current: QuizTopic,
+  rotation: number,
+): { text: ScoredSentence; topic: QuizTopic }[] {
+  const others = otherTopics(topics, current);
+  const candidates: { text: ScoredSentence; topic: QuizTopic }[] = [];
+
+  const deepest = Math.max(...others.map((topic) => topic.ranked.length), 0);
+
+  for (let depth = 0; depth < deepest; depth += 1) {
+    for (const topic of others) {
+      if (topic.ranked.length === 0) continue;
+
+      const sentence = topic.ranked[(depth + rotation) % topic.ranked.length];
+      if (sentence) candidates.push({ text: sentence, topic });
+    }
+  }
+
+  return candidates;
+}
+
 function buildRecallItem(
   topic: QuizTopic,
   topics: readonly QuizTopic[],
@@ -103,17 +138,10 @@ function buildRecallItem(
   const sentence = topic.ranked[rotation % topic.ranked.length];
   if (!sentence) return null;
 
-  const distractors = otherTopics(topics, topic)
-    .map((other) => {
-      const candidate = other.ranked[rotation % Math.max(other.ranked.length, 1)];
-      return candidate
-        ? {
-            text: asSentence(truncateWords(candidate.text, 26)),
-            label: `Confuses ${topic.name} with ${other.name}`,
-          }
-        : null;
-    })
-    .filter((entry): entry is { text: string; label: string } => entry !== null);
+  const distractors = foreignSentences(topics, topic, rotation).map((candidate) => ({
+    text: asSentence(truncateWords(candidate.text.text, 26)),
+    label: `Confuses ${topic.name} with ${candidate.topic.name}`,
+  }));
 
   const options = assembleOptions(
     asSentence(truncateWords(sentence.text, 26)),
@@ -143,22 +171,17 @@ function buildTermItem(
     topic.ranked[0];
   if (!sentence) return null;
 
-  const distractors = otherTopics(topics, topic)
-    .map((other) => {
-      const otherTerm = other.terms[rotation % Math.max(other.terms.length, 1)];
-      const candidate =
-        (otherTerm &&
-          other.ranked.find((entry) => termPattern(otherTerm).test(entry.text))) ||
-        other.ranked[0];
+  const distractors = foreignSentences(topics, topic, rotation).map((candidate) => {
+    const otherTerm =
+      candidate.topic.terms.find((entry) => termPattern(entry).test(candidate.text.text)) ??
+      candidate.topic.terms[0] ??
+      candidate.topic.name;
 
-      return candidate && otherTerm
-        ? {
-            text: asSentence(truncateWords(candidate.text, 26)),
-            label: `Confuses "${term}" with "${otherTerm}"`,
-          }
-        : null;
-    })
-    .filter((entry): entry is { text: string; label: string } => entry !== null);
+    return {
+      text: asSentence(truncateWords(candidate.text.text, 26)),
+      label: `Confuses "${term}" with "${otherTerm}"`,
+    };
+  });
 
   const options = assembleOptions(
     asSentence(truncateWords(sentence.text, 26)),
