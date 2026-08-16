@@ -16,10 +16,14 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
   },
   resolve: {
-    // Mirrors the `@/*` path alias in tsconfig.json so a test imports a module
-    // by the same specifier the application code uses.
     alias: {
+      // Mirrors the `@/*` path alias in tsconfig.json so a test imports a module
+      // by the same specifier the application code uses.
       "@": rootDir,
+      // `server-only` throws on import outside a React Server Component, which
+      // would make every server module untestable. The stub keeps the guard in
+      // the real build while letting tests import those modules directly.
+      "server-only": path.resolve(rootDir, "tests/stubs/server-only.ts"),
     },
   },
 });

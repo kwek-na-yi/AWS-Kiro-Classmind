@@ -3,7 +3,7 @@
  *
  * This module is the single declaration of the glossary entities and the enum
  * sets from requirements.md. Domain functions (`lib/domain/`), repositories
- * (`lib/repo/`), generation tasks (`lib/bedrock/`) and Route Handlers all speak
+ * (`lib/repo/`), the generation layer and Route Handlers all speak
  * these shapes, so no layer can drift on a field name or an allowed value.
  *
  * It contains types and closed value sets only — no I/O, no arithmetic, no
@@ -125,8 +125,8 @@ export interface LectureMaterial {
 
 /**
  * One numbered chunk of Source_Text. `index` is the stable citation target:
- * every generation task cites unit indexes and only `lib/bedrock/resolve.ts`
- * turns an index back into a `SourceRef`.
+ * every generation task cites unit indexes and one server-side resolver turns an
+ * index back into a `SourceRef`, so a citation can never be fabricated.
  */
 export interface SourceUnit {
   materialVersion: number;
