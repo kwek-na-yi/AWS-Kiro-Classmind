@@ -73,7 +73,7 @@ What is lost by deferring the `(optional)` tasks:
 
 - [ ] 1. Project foundation
 
-  - [ ] 1.1 Scaffold the Next.js App Router project in TypeScript
+  - [x] 1.1 Scaffold the Next.js App Router project in TypeScript
     - **Objective:** Create the single Next.js application with strict TypeScript, the App Router, and the directory skeleton from design.md Sections 3 and 4 so every later task has a home for its files.
     - **Files/components:** `package.json`, `tsconfig.json` (strict mode), `next.config.mjs`, `eslint.config.mjs`, `.gitignore`, `app/layout.tsx`, `app/page.tsx`, empty directories `app/api/`, `app/instructor/`, `app/class/`, `components/`, `hooks/`, `lib/domain/`, `lib/bedrock/`, `lib/ingest/`, `lib/repo/`, `lib/aws/`, `lib/design/`, `scripts/`
     - **Dependencies:** none
