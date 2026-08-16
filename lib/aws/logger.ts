@@ -13,18 +13,13 @@ import "server-only";
  */
 
 /**
- * Why a generation task failed, drawn from a closed set so one field can be
- * filtered. Provider-agnostic: these are the failure modes of any hosted
- * generation call, not of one vendor's SDK.
+ * Why a generation task failed. Declared by the AI layer, which owns the closed
+ * set, and re-exported here because this is where it is written to the log.
+ * Type-only, so the logger takes on no runtime dependency on that layer.
  */
-export type GenerationFailureReason =
-  | "timeout"
-  | "throttled"
-  | "access_denied"
-  | "transport"
-  | "schema_invalid_after_repair"
-  | "unresolvable_citation"
-  | "provider_unavailable";
+import type { GenerationFailureReason } from "@/lib/ai/provider";
+
+export type { GenerationFailureReason };
 
 export interface FallbackRecord {
   /** The generation task that degraded, e.g. `recap`, `topics`, `pool`. */
