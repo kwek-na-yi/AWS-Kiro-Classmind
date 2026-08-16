@@ -1,0 +1,73 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 626 >>
+stream
+BT /F1 12 Tf 72 720 Td (Database Normalisation) Tj ET
+BT /F1 12 Tf 72 702 Td () Tj ET
+BT /F1 12 Tf 72 684 Td (Normalisation organises the columns and tables of a relational) Tj ET
+BT /F1 12 Tf 72 666 Td (database to reduce data redundancy and improve data integrity.) Tj ET
+BT /F1 12 Tf 72 648 Td (A table is in first normal form when every column holds a single) Tj ET
+BT /F1 12 Tf 72 630 Td (atomic value and each row is uniquely identifiable by its key.) Tj ET
+BT /F1 12 Tf 72 612 Td (Repeating groups are moved into a separate related table so that) Tj ET
+BT /F1 12 Tf 72 594 Td (no column stores a list of values.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 656 >>
+stream
+BT /F1 12 Tf 72 720 Td (Second and Third Normal Form) Tj ET
+BT /F1 12 Tf 72 702 Td () Tj ET
+BT /F1 12 Tf 72 684 Td (A table is in second normal form when it is in first normal form) Tj ET
+BT /F1 12 Tf 72 666 Td (and every non-key column depends on the whole primary key rather) Tj ET
+BT /F1 12 Tf 72 648 Td (than on part of a composite key. Partial dependencies are removed) Tj ET
+BT /F1 12 Tf 72 630 Td (by splitting the table so each fact is stored exactly once.) Tj ET
+BT /F1 12 Tf 72 612 Td (Third normal form additionally removes transitive dependencies,) Tj ET
+BT /F1 12 Tf 72 594 Td (where a non-key column depends on another non-key column.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 478 >>
+stream
+BT /F1 12 Tf 72 720 Td (Denormalisation Trade-offs) Tj ET
+BT /F1 12 Tf 72 702 Td () Tj ET
+BT /F1 12 Tf 72 684 Td (Denormalisation reintroduces redundancy deliberately to reduce the) Tj ET
+BT /F1 12 Tf 72 666 Td (number of joins a query must perform. The cost is that the same) Tj ET
+BT /F1 12 Tf 72 648 Td (fact is now stored in more than one place, so every write path must) Tj ET
+BT /F1 12 Tf 72 630 Td (keep those copies consistent or the data drifts apart over time.) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000000929 00000 n 
+0000001055 00000 n 
+0000001761 00000 n 
+0000001887 00000 n 
+0000002415 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+2485
+%%EOF
