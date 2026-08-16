@@ -1,0 +1,42 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next.js build output
+.next/
+out/
+build/
+
+# production
+dist/
+
+# environment variables (server-only; never NEXT_PUBLIC_)
+.env
+.env.*
+!.env.local.example
+
+# typescript
+next-env.d.ts
+*.tsbuildinfo
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# testing / coverage
+coverage/
+
+# os / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# vercel
+.vercel
