@@ -210,7 +210,7 @@ async function main(): Promise<void> {
   if (target !== "aws") {
     throw new Error(
       `This script provisions real AWS resources but CLASSMIND_TARGET is "${target}". ` +
-        "Set CLASSMIND_TARGET=aws before running it (see .env.aws.example).",
+        "Set CLASSMIND_TARGET=aws before running it (see docs/configuration.md).",
     );
   }
 

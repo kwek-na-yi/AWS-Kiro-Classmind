@@ -1,52 +1,41 @@
-# dependencies
+# Dependencies
 node_modules/
 .pnp
 .pnp.js
 
-# next.js build output
+# Build output
 .next/
 out/
 build/
-
-# production
 dist/
+next-env.d.ts
+*.tsbuildinfo
 
-# environment variables (server-only; never NEXT_PUBLIC_)
-# .env.aws holds AWS session credentials — never commit it.
-.env
-.env.*
-!.env.example
-!.env.aws.example
+# Environment files: never committed, not even templates.
+# Variables are documented in docs/configuration.md.
+.env*
 
-# AWS credential files, in case one is ever copied into the project
+# Credentials, in case one is ever copied into the project
 .aws/
 credentials
 *.pem
 
-# typescript
-next-env.d.ts
-*.tsbuildinfo
-
-# logs and scratch output
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.log
-lint*.json
-lint*.txt
-probe.txt
-tree.txt
-
-# local-mode data: the embedded store and uploaded lecture files
+# Local-mode data: the embedded store and uploaded lecture files
 .classmind/
 
-# testing / coverage
+# Tests and coverage
 coverage/
 playwright-report/
 test-results/
 blob-report/
 
-# os / editor cruft
+# Logs
+*.log
+
+# Deployment tooling
+.vercel/
+
+# OS and editor files
 .DS_Store
 Thumbs.db
 desktop.ini
@@ -54,6 +43,3 @@ desktop.ini
 .vscode/*
 !.vscode/extensions.json
 *.swp
-
-# vercel (project link; `.env*` above already covers pulled env files)
-.vercel

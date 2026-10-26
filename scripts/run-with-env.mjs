@@ -21,7 +21,7 @@ if (!envFile || !command) {
 
 if (!existsSync(envFile)) {
   console.error(
-    `${envFile} does not exist. Copy .env.aws.example to .env.aws and fill it in.`,
+    `${envFile} does not exist. Create it with the variables listed in docs/configuration.md.`,
   );
   process.exit(1);
 }

@@ -85,7 +85,7 @@ export class MissingEnvError extends Error {
   constructor(missing: readonly string[]) {
     super(
       `Missing required environment variable(s) for CLASSMIND_TARGET=${deploymentTarget()}: ` +
-        `${missing.join(", ")}. See .env.aws.example — or unset CLASSMIND_TARGET to run locally.`,
+        `${missing.join(", ")}. See docs/configuration.md — or unset CLASSMIND_TARGET to run locally.`,
     );
     this.name = "MissingEnvError";
     this.missing = missing;

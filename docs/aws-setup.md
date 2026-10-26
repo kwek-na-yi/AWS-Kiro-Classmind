@@ -25,11 +25,8 @@ Three targets, one switch: `CLASSMIND_TARGET`, resolved in `lib/target.ts`.
 
 ### 1. Configure
 
-```
-cp .env.aws.example .env.aws
-```
-
-Fill in:
+Create `.env.aws` in the project root (it is git-ignored) with these
+variables — the full reference is [configuration.md](configuration.md):
 
 | Variable | Notes |
 | --- | --- |
@@ -106,10 +103,12 @@ happened since.
 ### 4. Run
 
 ```
-npm run dev:aws       # the app in development, against AWS
-npm run build         # the production build
-npm run start:aws     # the production server, against AWS
-npm run verify:aws    # the whole journey, against AWS (needs one of the two running)
+npm run dev:aws          # the app in development, against AWS
+npm run build            # the production build
+npm run start:aws        # the production server, against AWS
+npm run verify:aws       # the whole journey, against AWS (needs one of the two running)
+npm run demo:reset:aws   # restore both demo classes in AWS
+npm run reset:class:aws  # empty the UPLOAD class in AWS
 ```
 
 ---

@@ -6,16 +6,12 @@
 
 # --- Secrets. The reason this file matters. -------------------------------
 #
-# `.env.aws` holds live AWS session credentials and `.env.local` points
-# DynamoDB at localhost. Neither may enter an image: the SDK resolves
-# credentials at run time from the standard provider chain, and every other
-# variable is supplied with `--env-file` or the task definition. Nothing is
-# read at build time — no value in this project is prefixed NEXT_PUBLIC_ — so
-# excluding them costs the build nothing.
-.env
-.env.*
-!.env.example
-!.env.aws.example
+# No environment file may enter an image: configuration is supplied at run
+# time with `-e` / `--env-file`, and AWS credentials come from the provider
+# chain. The image does not set the only build-time variable,
+# NEXT_PUBLIC_CLASSMIND_PUBLIC_DEMO (a non-secret flag). See
+# docs/configuration.md.
+.env*
 .aws/
 *.pem
 *.key

@@ -1,8 +1,5 @@
 # Never upload credentials or local data with a CLI deployment.
-.env
-.env.*
-!.env.example
-!.env.aws.example
+.env*
 .aws/
 credentials
 *.pem

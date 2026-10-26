@@ -1,7 +1,7 @@
 # Deploying the public demo to Vercel
 
-Local development needs none of this — see the [README](../README.md). This is
-how the hosted portfolio demo is set up.
+The public demo runs at <https://classmind-app.vercel.app>. Local development
+needs none of this — see the [README](../README.md).
 
 ## Architecture on Vercel
 
@@ -23,12 +23,15 @@ database returns errors rather than quietly losing data.
 
 ## Environment variables
 
-| Variable | Value | Secret? |
-| --- | --- | --- |
-| `DATABASE_URL` | Set automatically when a Neon database is connected to the project | Yes |
-| `CLASSMIND_TARGET` | `postgres` | No |
-| `NEXT_PUBLIC_CLASSMIND_PUBLIC_DEMO` | `1` — rate limits, read-only demo lecture, public notice | No |
-| `CRON_SECRET` | A long random string; authorises the reset endpoint | Yes |
+Four variables, all described in [configuration.md](configuration.md#hosted-demo-vercel):
+
+- `DATABASE_URL` — set automatically by the Neon integration (secret)
+- `CLASSMIND_TARGET` = `postgres`
+- `NEXT_PUBLIC_CLASSMIND_PUBLIC_DEMO` = `1`
+- `CRON_SECRET` — a long random string (secret)
+
+Sensitive values cannot be read back from Vercel once saved; keep `CRON_SECRET`
+in a password manager.
 
 ## One-time setup
 
@@ -39,7 +42,7 @@ database returns errors rather than quietly losing data.
    **The database region must match `regions` in `vercel.json`.** The hosted
    demo's database is in Singapore, so functions run in `sin1`. Every write is a
    short transaction of several round trips, so a cross-region database turns a
-   2-second first-run seed into roughly two minutes.
+   first-run seed of about two seconds into one of about two minutes.
 3. Add the three non-database variables above (`vercel env add …`).
 4. Deploy: `vercel deploy` for a preview, `vercel deploy --prod` for production.
 
@@ -53,17 +56,13 @@ curl -X POST https://<your-deployment>/api/admin/reset-demo \
 ```
 
 It rebuilds CM2026, empties UPLOAD and clears the rate-limit counters, so each
-daily reset also renews every visitor's budget. It touches nothing else. Without `CRON_SECRET` configured the endpoint returns 404.
+daily reset also renews every visitor's budget. It touches nothing else.
+Without `CRON_SECRET` configured the endpoint returns 404.
 
 ## Testing a deployment
 
-```bash
-E2E_BASE_URL=https://<your-deployment> E2E_RESET_TOKEN=<CRON_SECRET> npm run test:e2e
-```
-
-This runs the full browser journey plus deployment-only checks (security
-headers, public notice, read-only demo lecture, upload ceiling, persistence
-across independent requests, error handling). It resets the demo first.
+See [testing.md](testing.md#against-a-deployment). The deployed suite resets the
+shared demo, so run it deliberately.
 
 ## Public-demo protections
 
