@@ -7,8 +7,6 @@ import {
   sessionPk,
 } from "@/lib/repo/keys";
 import {
-  countPrefix,
-  getItem,
   putAll,
   queryPrefix,
   type Item,
@@ -83,48 +81,6 @@ export async function listQuizItems(
     prefixes.quizItems(version),
   );
   return items.flatMap((item) => toQuizItem(item) ?? []);
-}
-
-/**
- * The candidates at one Difficulty_Level. The level sits in the sort key, so
- * this is one `begins_with` query rather than a filter over the whole pool.
- */
-export async function listQuizItemsByDifficulty(
-  sessionId: string,
-  version: number,
-  difficulty: DifficultyLevel,
-): Promise<QuizItem[]> {
-  const items = await queryPrefix<QuizItemItem>(
-    sessionId,
-    prefixes.quizItems(version, difficulty),
-  );
-  return items.flatMap((item) => toQuizItem(item) ?? []);
-}
-
-/**
- * How many valid items the pool holds at one Difficulty_Level, counted by
- * DynamoDB — the check that decides whether a level needs regeneration.
- */
-export async function countQuizItemsByDifficulty(
-  sessionId: string,
-  version: number,
-  difficulty: DifficultyLevel,
-): Promise<number> {
-  return countPrefix(sessionId, prefixes.quizItems(version, difficulty));
-}
-
-/** One Quiz_Item by its full key. */
-export async function getQuizItem(
-  sessionId: string,
-  version: number,
-  difficulty: DifficultyLevel,
-  quizItemId: string,
-): Promise<QuizItem | null> {
-  const item = await getItem<QuizItemItem>(
-    sessionPk(sessionId),
-    quizItemSk(version, difficulty, quizItemId),
-  );
-  return item ? toQuizItem(item) : null;
 }
 
 /**

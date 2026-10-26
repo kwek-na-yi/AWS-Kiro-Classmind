@@ -108,9 +108,6 @@ export const card = {
   boxShadow: shadow.card,
 } as const;
 
-/** Kept so older call sites keep compiling. */
-export const panel = card;
-
 export const button = {
   primary: {
     background: colour.primary,

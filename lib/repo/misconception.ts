@@ -1,7 +1,7 @@
 import "server-only";
 
 import { misconceptionSk, parseMisconceptionSk, sessionPk } from "@/lib/repo/keys";
-import { getItem, getItems, putItem, type Item } from "@/lib/repo/table";
+import { getItems, putItem, type Item } from "@/lib/repo/table";
 import type { SourceRef } from "@/lib/types";
 
 /**
@@ -30,27 +30,6 @@ export interface Clarification {
 export interface ClarificationRef {
   quizItemId: string;
   optionId: string;
-}
-
-export async function getClarification(
-  sessionId: string,
-  version: number,
-  quizItemId: string,
-  optionId: string,
-): Promise<Clarification | null> {
-  const item = await getItem<ClarificationItem>(
-    sessionPk(sessionId),
-    misconceptionSk(version, quizItemId, optionId),
-  );
-  if (!item) return null;
-
-  return {
-    quizItemId,
-    optionId,
-    clarification: item.clarification,
-    sourceRef: item.sourceRef,
-    generatedAt: item.generatedAt,
-  };
 }
 
 /**

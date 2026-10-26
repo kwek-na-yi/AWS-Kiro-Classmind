@@ -1,7 +1,7 @@
 import "server-only";
 
-import { parseReportSk, prefixes, reportSk, sessionPk } from "@/lib/repo/keys";
-import { getItem, putItem, queryPrefix, type Item } from "@/lib/repo/table";
+import { reportSk, sessionPk } from "@/lib/repo/keys";
+import { getItem, putItem, type Item } from "@/lib/repo/table";
 import type { DifficultyLevel, UnderstandingReport } from "@/lib/types";
 
 /**
@@ -64,18 +64,4 @@ export async function getReport(
     reportSk(learnerId, quizSessionId),
   );
   return item ? toReport(learnerId, quizSessionId, item) : null;
-}
-
-/** Every Understanding_Report belonging to one Learner. */
-export async function listReports(
-  sessionId: string,
-  learnerId: string,
-): Promise<UnderstandingReport[]> {
-  const items = await queryPrefix<ReportItem>(sessionId, prefixes.reports(learnerId));
-
-  return items.flatMap((item) => {
-    const parsed = parseReportSk(String(item.SK));
-    if (!parsed) return [];
-    return [toReport(parsed.learnerId, parsed.quizSessionId, item)];
-  });
 }

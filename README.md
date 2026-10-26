@@ -14,13 +14,34 @@ Built for the **AWS Kiro competition** and specified with Kiro.
 
 ![Class Insight: the weakest topic and the misconception behind it](docs/screenshots/07-class-insight.png)
 
-## The problem
+## Problem statement
 
-After a lecture, students rarely know which ideas they have actually
-understood, and instructors rarely know which ideas the class as a whole has
-missed. ClassMind gives each learner a study session shaped to their level, and
-turns everyone's quiz answers into an anonymous picture of the class: which
-topics are weakest, and which specific wrong answer many people chose.
+The competition brief asked for a learning tool that takes **uploaded lecture
+material**, produces a **structured recap with key takeaways**, and **generates
+quiz questions** from it.
+
+Behind that brief sit two gaps the team set out to close (see the
+[requirements](.kiro/specs/classmind-mvp/requirements.md)):
+
+- A learner reviewing a lecture gets the same summary whatever they already
+  know, and has no clear way to find out which ideas they have not understood.
+- An instructor, or the class itself, cannot see which topics the class as a
+  whole is struggling with, or which specific wrong beliefs are shared, without
+  exposing any individual's results.
+
+## Solution
+
+ClassMind implements the required flow — upload, recap, quiz — and builds two
+things on top of it:
+
+- **Personalisation for the individual.** The learner chooses an understanding
+  level and an explanation style, and gets a recap written for that profile. The
+  quiz adapts its difficulty as they answer, and ends with a per-topic report.
+- **An anonymous view of the class.** Every answer feeds a Class Understanding
+  Map and a misconception detector. Topics stay hidden until enough learners
+  have answered, and no names or individual answers are ever shown. Learners
+  can then fix the weakest topic together in a study thread, where each
+  explanation is checked against the lecture.
 
 ## Features
 
@@ -50,10 +71,32 @@ rule-based engine that quotes the lecture — not a language model.** The
 original design used Amazon Bedrock, which was never enabled; see
 [architecture](docs/architecture.md#content-generation).
 
+## How it works
+
+```mermaid
+flowchart LR
+  B[Browser] -->|fetch + learner id| R[Next.js route handlers]
+  R --> D[Domain rules<br/>quiz, mastery, class map,<br/>misconceptions]
+  R --> G[Rule-based content<br/>recap, questions, checks]
+  R --> S[(Storage port)]
+  S --> L[Local JSON file<br/>development]
+  S --> P[PostgreSQL / Neon<br/>hosted demo]
+```
+
+One Next.js application: its route handlers are the whole backend. Scoring and
+aggregation are pure, deterministic functions, and storage sits behind a small
+interface so the same code runs on a local file or on PostgreSQL. Details:
+[docs/architecture.md](docs/architecture.md).
+
 ## Tech stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · PostgreSQL (Neon) via
-`node-postgres` · `unpdf` · Vitest, fast-check, PGlite · Playwright · Vercel
+| Area | Technology |
+| --- | --- |
+| Application | Next.js 16 (App Router), React 19, TypeScript |
+| Data | Embedded JSON store (local), PostgreSQL on Neon via `node-postgres` (hosted) |
+| Document parsing | `unpdf` for PDF text extraction |
+| Testing | Vitest, fast-check (property tests), PGlite (in-memory PostgreSQL), Playwright |
+| Hosting | Vercel (functions in Singapore, `sin1`), Neon PostgreSQL |
 
 ## Getting started
 
@@ -145,12 +188,24 @@ uploads, security headers). See [docs/deploy-vercel.md](docs/deploy-vercel.md).
 - **The hosted demo is shared.** What a visitor enters is visible to other
   visitors until the daily reset; there is no content moderation.
 - **Text-based PDFs only** — there is no OCR.
-- The local JSON store is for a single server; hosting uses PostgreSQL.
-- The optional AWS adapter and the Dockerfile have not been exercised against
-  AWS or rebuilt since the move away from AWS.
+- **Single-server local store.** The default JSON store suits one server;
+  hosting uses PostgreSQL.
+- **Unverified since the move away from AWS:** the optional DynamoDB/S3 adapter
+  has not been run against AWS, and the Dockerfile has not been rebuilt.
 
-## Acknowledgements
+### Future work
 
-Built by the ClassMind team for the AWS Kiro competition. Requirements, design
-and the implementation plan were developed with [Kiro](https://kiro.dev) and are
-kept in [`.kiro/specs/classmind-mvp/`](.kiro/specs/classmind-mvp/).
+None of these is implemented:
+
+- A hosted language model behind the existing `AIProvider` interface, for
+  recaps that paraphrase and explanation checks that compare meaning.
+- An instructor interface for creating classes and viewing class insight.
+- OCR for scanned lecture PDFs.
+
+## Competition and team
+
+Built by the ClassMind student team for the **AWS Kiro competition**. The
+requirements, design and implementation plan were written with
+[Kiro](https://kiro.dev) and are kept in
+[`.kiro/specs/classmind-mvp/`](.kiro/specs/classmind-mvp/), each with a note on
+how the shipped implementation differs from the original AWS design.
