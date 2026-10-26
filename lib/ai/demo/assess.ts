@@ -3,6 +3,7 @@ import {
   asSentence,
   contentTerms,
   negationCount,
+  normalise,
   numbersIn,
   overlapCount,
   truncateChars,
@@ -81,10 +82,17 @@ export function buildClarification(
 
   const quoted = supporting ? asSentence(truncateWords(supporting.text, 40)) : "";
 
+  // The correct option is itself drawn from the material, so the best-matching
+  // sentence is frequently the same text. Restating it as "That supports: …"
+  // then reads as a stutter, so the restatement is dropped when the quotation
+  // already carries it.
+  const restates =
+    quoted.length > 0 && normalise(quoted).includes(normalise(misconception.correctOptionText));
+
   const clarification = truncateChars(
     [
       quoted ? `The lecture material states: "${quoted}"` : "",
-      `That supports: ${asSentence(misconception.correctOptionText)}`,
+      restates ? "" : `That supports: ${asSentence(misconception.correctOptionText)}`,
       `Choosing "${truncateWords(misconception.distractorText, 14)}" reflects ${misconception.misconceptionLabel}, which the material does not state.`,
     ]
       .filter((part) => part.length > 0)

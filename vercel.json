@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "regions": ["sin1"],
+  "crons": [
+    {
+      "path": "/api/admin/reset-demo",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

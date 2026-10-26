@@ -9,6 +9,7 @@ const session = vi.hoisted(() => ({
 }));
 
 const material = vi.hoisted(() => ({
+  getMaterial: vi.fn(),
   getRecap: vi.fn(),
   putRecap: vi.fn(),
   listSourceUnits: vi.fn(),
@@ -77,6 +78,7 @@ beforeEach(() => {
     understandingLevel: "Basic_Understanding",
     explanationStyle: "Detailed",
   });
+  material.getMaterial.mockResolvedValue({ status: "ready", version: 1 });
   material.getRecap.mockResolvedValue(null);
   material.putRecap.mockResolvedValue(undefined);
   material.listSourceUnits.mockResolvedValue(UNITS);
@@ -162,6 +164,20 @@ describe("cache hit", () => {
 });
 
 describe("profile and access", () => {
+  it("explains that a class without lecture material has nothing to recap", async () => {
+    // Regression: an empty class got a "0 things you need to know" fallback
+    // claiming to quote material that did not exist.
+    material.getMaterial.mockResolvedValue(null);
+
+    const response = await GET(get(), context);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error.code).toBe("MATERIAL_REQUIRED");
+    expect(material.putRecap).not.toHaveBeenCalled();
+    expect(logger.logFallback).not.toHaveBeenCalled();
+  });
+
   it("requires a profile before a recap can be produced", async () => {
     session.getProfile.mockResolvedValue(null);
 

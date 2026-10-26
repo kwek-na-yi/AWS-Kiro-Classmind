@@ -3,7 +3,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { logError } from "@/lib/aws/logger";
-import { errorResponse, internalEnvelope, isAppError } from "@/lib/http/errors";
+import {
+  asAwsError,
+  errorResponse,
+  internalEnvelope,
+  isAppError,
+} from "@/lib/http/errors";
 
 /**
  * The uniform handler pipeline.
@@ -119,6 +124,22 @@ class Pipeline<T> {
 
   private toErrorResponse(error: unknown): Response {
     if (isAppError(error)) return errorResponse(error);
+
+    // An unusable AWS session is an operational condition, not a bug in a
+    // handler: it is reported with the sentence that fixes it, and still logged
+    // in full so the cause is not lost.
+    const awsError = asAwsError(error);
+
+    if (awsError) {
+      logError({
+        event: "aws_unavailable",
+        requestId: this.ctx.requestId,
+        error,
+        context: { path: new URL(this.ctx.request.url).pathname },
+      });
+
+      return errorResponse(awsError);
+    }
 
     logError({
       event: "unhandled_error",

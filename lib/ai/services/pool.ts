@@ -103,7 +103,14 @@ export async function generateAndPersistQuizPool(
   ]);
 
   const provider = input.provider ?? getAIProvider();
-  const itemsPerDifficulty = input.itemsPerDifficulty ?? TARGET_PER_DIFFICULTY;
+
+  // At least one item per Topic per level, so no Topic is left out of the pool
+  // entirely. A fixed target below the Topic count silently excluded the last
+  // Topics of the material: they had no Quiz_Item at any level, so no Learner
+  // could ever answer them and the Class_Understanding_Map showed them as
+  // "not enough responses" for the life of the class.
+  const itemsPerDifficulty =
+    input.itemsPerDifficulty ?? Math.max(TARGET_PER_DIFFICULTY, topics.length);
 
   const unavailable = async (
     reason: Parameters<typeof logFallback>[0]["reason"],

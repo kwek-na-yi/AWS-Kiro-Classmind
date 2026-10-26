@@ -4,7 +4,13 @@ import {
   type ScoredSentence,
   type TopicView,
 } from "@/lib/ai/demo/corpus";
-import { asSentence, hashString, normalise, truncateWords } from "@/lib/ai/demo/text";
+import {
+  asSentence,
+  contentTerms,
+  hashString,
+  normalise,
+  truncateWords,
+} from "@/lib/ai/demo/text";
 import type {
   QuizItemOutput,
   QuizOptionOutput,
@@ -37,6 +43,69 @@ const ALL_DIFFICULTIES: readonly DifficultyLevel[] = [1, 2, 3];
 /** A Topic with its sentences pre-ranked, so item building is a lookup. */
 interface QuizTopic extends TopicView {
   ranked: ScoredSentence[];
+  /** Terms worth naming in a question — see `distinctiveTerms`. */
+  focusTerms: string[];
+}
+
+/**
+ * The terms worth building a question around: this Topic's, and only this
+ * Topic's.
+ *
+ * `terms` is a plain frequency ranking, so its head is the vocabulary every
+ * section shares — the words of the Topic's own heading ("form", "normal"), and
+ * the words the whole lecture is written in ("column", "table", "data"). A stem
+ * asking what the material says about "column", or a Misconception_Label
+ * reading `Confuses "form" with "key"`, names nothing a Learner holds a belief
+ * about, and the question stops discriminating between the Topics.
+ *
+ * Filters in order of strength, each falling back to the next so a Topic always
+ * yields something:
+ *
+ * 1. whole words — `tokenise` splits on punctuation, so "non-key" arrives as
+ *    "non" and "key", and a question about "non" is nonsense;
+ * 2. terms that appear in no other Topic's vocabulary — "redundancy",
+ *    "transitive", "covering";
+ * 3. terms of at least five characters, which is what separates a named idea
+ *    from the general-purpose nouns a technical text is written in ("data",
+ *    "one", "row");
+ * 4. failing all of that, terms that are at least not the Topic's own name, and
+ *    finally the ranking as it stands.
+ */
+const MIN_MEANINGFUL_TERM_CHARS = 5;
+
+function distinctiveTerms(
+  topic: TopicView,
+  others: readonly TopicView[],
+): string[] {
+  const ownWords = new Set(contentTerms(topic.name));
+  const elsewhere = new Set(
+    others
+      .filter((other) => other.topicId !== topic.topicId)
+      .flatMap((other) => [...other.terms, ...contentTerms(other.name)])
+      .map((term) => normalise(term)),
+  );
+
+  const body = topic.sentences.map((sentence) => sentence.text).join(" ");
+
+  // A term that only ever occurs inside a hyphenated compound is a fragment of
+  // a word, not a word the material uses.
+  const wholeWord = (term: string): boolean =>
+    new RegExp(`(?:^|[^\\w-])${escapeForRegExp(term)}(?:[^\\w-]|$)`, "i").test(body);
+
+  const notOwnName = topic.terms.filter((term) => !ownWords.has(normalise(term)));
+  const standalone = notOwnName.filter(wholeWord);
+  const base = standalone.length > 0 ? standalone : notOwnName;
+
+  const exclusive = base.filter((term) => !elsewhere.has(normalise(term)));
+  const preferred = exclusive.length > 0 ? exclusive : base;
+
+  const substantial = preferred.filter(
+    (term) => term.length >= MIN_MEANINGFUL_TERM_CHARS,
+  );
+
+  if (substantial.length > 0) return substantial;
+  if (preferred.length > 0) return preferred;
+  return [...topic.terms];
 }
 
 function escapeForRegExp(value: string): string {
@@ -163,25 +232,21 @@ function buildTermItem(
   topics: readonly QuizTopic[],
   rotation: number,
 ): QuizItemOutput | null {
-  if (topic.terms.length === 0) return null;
+  if (topic.focusTerms.length === 0) return null;
 
-  const term = topic.terms[rotation % topic.terms.length];
+  const term = topic.focusTerms[rotation % topic.focusTerms.length];
   const sentence =
     topic.ranked.find((candidate) => termPattern(term).test(candidate.text)) ??
     topic.ranked[0];
   if (!sentence) return null;
 
-  const distractors = foreignSentences(topics, topic, rotation).map((candidate) => {
-    const otherTerm =
-      candidate.topic.terms.find((entry) => termPattern(entry).test(candidate.text.text)) ??
-      candidate.topic.terms[0] ??
-      candidate.topic.name;
-
-    return {
-      text: asSentence(truncateWords(candidate.text.text, 26)),
-      label: `Confuses "${term}" with "${otherTerm}"`,
-    };
-  });
+  // The label names the two Topics rather than the two words. A Learner who
+  // picks this option has answered about the wrong Topic, which is a belief
+  // worth clarifying; "confuses one noun with another noun" is not.
+  const distractors = foreignSentences(topics, topic, rotation).map((candidate) => ({
+    text: asSentence(truncateWords(candidate.text.text, 26)),
+    label: `Confuses ${topic.name} with ${candidate.topic.name}`,
+  }));
 
   const options = assembleOptions(
     asSentence(truncateWords(sentence.text, 26)),
@@ -203,9 +268,9 @@ function buildClozeItem(
   topics: readonly QuizTopic[],
   rotation: number,
 ): QuizItemOutput | null {
-  if (topic.terms.length === 0) return null;
+  if (topic.focusTerms.length === 0) return null;
 
-  const term = topic.terms[rotation % topic.terms.length];
+  const term = topic.focusTerms[rotation % topic.focusTerms.length];
   const pattern = termPattern(term);
 
   const sentence = topic.ranked.find((candidate) => pattern.test(candidate.text));
@@ -218,7 +283,7 @@ function buildClozeItem(
 
   const distractors = otherTopics(topics, topic)
     .map((other) => {
-      const otherTerm = other.terms.find(
+      const otherTerm = other.focusTerms.find(
         (candidate) => normalise(candidate) !== normalise(term),
       );
 
@@ -285,14 +350,15 @@ export function buildQuizPool(
   const difficulties = options.difficulties ?? ALL_DIFFICULTIES;
   const target = options.itemsPerDifficulty ?? DEFAULT_ITEMS_PER_DIFFICULTY;
 
-  const topics: QuizTopic[] = corpus.topics
-    .filter((topic) => topic.sentences.length > 0)
-    .map((topic) => ({
-      ...topic,
-      // Ranked once, at a fixed level: item quality should not depend on which
-      // Learner happens to trigger pool generation.
-      ranked: scoreSentences(topic.sentences, "Basic_Understanding", [topic.name]),
-    }));
+  const covered = corpus.topics.filter((topic) => topic.sentences.length > 0);
+
+  const topics: QuizTopic[] = covered.map((topic) => ({
+    ...topic,
+    // Ranked once, at a fixed level: item quality should not depend on which
+    // Learner happens to trigger pool generation.
+    ranked: scoreSentences(topic.sentences, "Basic_Understanding", [topic.name]),
+    focusTerms: distinctiveTerms(topic, covered),
+  }));
 
   if (topics.length === 0) return { items: [] };
 

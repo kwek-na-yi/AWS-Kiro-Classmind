@@ -1,62 +1,44 @@
 import type { Metadata } from "next";
 
+import "@/app/globals.css";
+import { colour } from "@/lib/design/tokens";
+
 export const metadata: Metadata = {
   title: "ClassMind",
   description:
-    "Turns uploaded lecture material into a personalised study experience and gives the class a shared, anonymous view of where understanding is weak.",
+    "Understand yourself. Understand your class. ClassMind turns one lecture into a personalised recap, an adaptive check, and a shared view of where the class is struggling.",
 };
 
 /**
- * The application shell.
+ * The document shell.
  *
- * It provides the wordmark, the fixed content column (Requirement 18.4) and the
- * single `<main>` landmark every page renders into. The four named views are
- * Class_Session-scoped, so their navigation lives in
- * `app/class/[sessionId]/layout.tsx`, which is the layout that owns them.
+ * Deliberately thin: it sets the page ground and the type family and nothing
+ * else. The sidebar belongs to the Class_Session layout, because the landing
+ * page has no class to navigate and should read as a product front door.
  *
- * There is deliberately no text input anywhere in this shell: ClassMind exposes
- * exactly four named views and no free-form chat surface (Requirements 18.1,
- * 18.2).
+ * There is no text input and no chat surface anywhere in this shell — ClassMind
+ * exposes exactly the named views in the sidebar.
+ *
+ * `suppressHydrationWarning` covers browser extensions that stamp classes onto
+ * these two elements before React hydrates. It applies one level deep, so a
+ * genuine mismatch inside the app is still reported.
  */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         style={{
-          margin: 0,
           fontFamily:
-            "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-          color: "#111827",
-          background: "#f9fafb",
+            "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif",
+          color: colour.text,
+          background: colour.canvas,
+          WebkitFontSmoothing: "antialiased",
         }}
       >
-        <header
-          style={{
-            borderBottom: "1px solid #e5e7eb",
-            background: "#ffffff",
-          }}
-        >
-          <div
-            style={{
-              maxWidth: "1152px",
-              margin: "0 auto",
-              padding: "16px 24px",
-            }}
-          >
-            <span style={{ fontSize: "18px", fontWeight: 600 }}>ClassMind</span>
-          </div>
-        </header>
-        <main
-          style={{
-            maxWidth: "1152px",
-            margin: "0 auto",
-            padding: "24px",
-          }}
-        >
-          {children}
-        </main>
+        {children}
       </body>
     </html>
   );

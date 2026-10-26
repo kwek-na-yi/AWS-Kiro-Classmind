@@ -11,6 +11,12 @@
  * Words carrying no topical meaning, excluded when scoring or comparing text.
  * A fixed list rather than a computed one, so the behaviour cannot drift with
  * the corpus.
+ *
+ * The second block is the closed-class vocabulary a technical text is written
+ * in — quantifiers, degree adverbs and discourse connectives. They are frequent
+ * in every section, so a frequency ranking floats them to the top and a
+ * generated question ends up asking what the material says about "every" or
+ * "additionally". They carry no more topical meaning than "the" does.
  */
 export const STOPWORDS = new Set([
   "a", "about", "above", "after", "again", "all", "also", "an", "and", "any",
@@ -26,6 +32,11 @@ export const STOPWORDS = new Set([
   "to", "too", "under", "until", "up", "very", "was", "we", "were", "what",
   "when", "where", "which", "while", "who", "whom", "why", "will", "with",
   "would", "you", "your",
+
+  "additionally", "already", "always", "another", "even", "ever", "every",
+  "less", "made", "make", "makes", "many", "means", "much", "never", "often",
+  "one", "rather", "several", "still", "therefore", "though", "thus", "two",
+  "usually", "whether", "whole", "within", "yet",
 ]);
 
 /** Words that flip the polarity of a claim, used by the contradiction check. */
@@ -54,17 +65,75 @@ export interface Sentence {
   position: number;
 }
 
+/** A line that begins a new block rather than continuing the one above it. */
+const BLOCK_START = /^\s*(?:[-*•>|]|#{1,6}\s|\d+[.)]\s)/;
+
+/**
+ * A line nothing may be joined onto, even though it carries no full stop.
+ *
+ * A heading is the case that matters: "# Normalisation" followed by the
+ * paragraph beneath it is two things, and gluing them produces "Normalisation
+ * Normalisation organises the columns…" — which then appears as a quiz option
+ * whose leading word names its own topic and gives the answer away. List items
+ * are deliberately absent, because a long bullet genuinely does wrap.
+ */
+const NEVER_CONTINUED = /^\s*(?:#{1,6}\s|[>|])/;
+
+/**
+ * Rejoins lines that a writer hard-wrapped inside a paragraph.
+ *
+ * Lecture notes are routinely wrapped at a column, so "A table is in first
+ * normal\nform when every column holds a single atomic value" is one sentence
+ * written across two lines. Treating each line as a sentence produced quotations
+ * that began and ended mid-clause — "form when every column holds a single
+ * atomic value and each row is uniquely." — and those fragments went on to
+ * become recap bullets, quiz options and misconception clarifications.
+ *
+ * A line continues the previous one when the previous line does not end in
+ * terminal punctuation and the line itself does not open a new block. A blank
+ * line always separates, so paragraphs, headings, table rows and list items stay
+ * apart. Structure is preserved; only the wrapping is undone.
+ */
+export function unwrapLines(text: string): string {
+  const out: string[] = [];
+
+  for (const raw of text.split(/\n/)) {
+    const line = raw.trim();
+
+    if (line.length === 0) {
+      out.push("");
+      continue;
+    }
+
+    const previous = out[out.length - 1];
+    const continues =
+      previous !== undefined &&
+      previous.length > 0 &&
+      !/[.!?:;]$/.test(previous) &&
+      !NEVER_CONTINUED.test(previous) &&
+      !BLOCK_START.test(raw);
+
+    if (continues) {
+      out[out.length - 1] = `${previous} ${line}`;
+    } else {
+      out.push(line);
+    }
+  }
+
+  return out.join("\n");
+}
+
 /**
  * Splits text into sentences.
  *
- * Breaks on terminal punctuation followed by whitespace, and on line breaks so
- * that bullet lists and headings — common in lecture material — become separate
- * sentences rather than one run-on. Abbreviations are not special-cased: an
- * over-split sentence is a cosmetic flaw, while a merged one would produce a
- * misleading quotation.
+ * Hard wrapping is undone first (see `unwrapLines`), then the text breaks on
+ * terminal punctuation followed by whitespace and on the remaining line breaks,
+ * so bullet lists and headings become separate sentences rather than one
+ * run-on. Abbreviations are not special-cased: an over-split sentence is a
+ * cosmetic flaw, while a merged one would produce a misleading quotation.
  */
 export function splitSentences(text: string): string[] {
-  return text
+  return unwrapLines(text)
     .split(/\n+/)
     .flatMap((line) => line.split(/(?<=[.!?])\s+/))
     .map((sentence) => sentence.replace(/^[\s\-*•\d.)]+/, "").trim())
@@ -161,12 +230,18 @@ export function truncateChars(text: string, limit: number): string {
   return `${(lastSpace > limit / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
-/** Ends a fragment with a full stop when it has no terminal punctuation. */
+/**
+ * Ends a fragment with a full stop when it has no terminal punctuation.
+ *
+ * An ellipsis counts as terminal: text that `truncateWords` has already cut
+ * short says so with "…", and appending a full stop after it ("….") reads as a
+ * typo rather than as a sentence.
+ */
 export function asSentence(text: string): string {
   const trimmed = text.trim();
   if (trimmed.length === 0) return trimmed;
 
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  return /[.!?…]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
 /**

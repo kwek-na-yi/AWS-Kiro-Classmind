@@ -1,7 +1,9 @@
+import { ensureDemoData } from "@/lib/demo/bootstrap";
 import { validateDisplayName, validateJoinCode } from "@/lib/domain/validate-input";
 import { newLearnerId } from "@/lib/http/auth";
 import { AppError } from "@/lib/http/errors";
 import { pipeline, readJson } from "@/lib/http/pipeline";
+import { enforceRateLimit, LIMITS } from "@/lib/http/rate-limit";
 import { getMaterial, listTopics } from "@/lib/repo/material";
 import { registerLearner, resolveJoinCode } from "@/lib/repo/session";
 
@@ -14,7 +16,10 @@ import { registerLearner, resolveJoinCode } from "@/lib/repo/session";
  */
 export async function POST(request: Request) {
   return pipeline(request)
-    .parse(() => readJson(request))
+    .parse(async () => {
+      await enforceRateLimit(request, LIMITS.join);
+      return readJson(request);
+    })
     .validate((body) => {
       const joinCode = validateJoinCode(body.joinCode);
       if (!joinCode.ok) {
@@ -29,6 +34,8 @@ export async function POST(request: Request) {
       return { joinCode: joinCode.value, displayName: displayName.value };
     })
     .read(async (input) => {
+      // A fresh clone builds its demo classes on the first join.
+      await ensureDemoData();
       const session = await resolveJoinCode(input.joinCode);
 
       if (!session) {

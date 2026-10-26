@@ -1,6 +1,7 @@
 import {
   contentTerms,
   keyTerms,
+  normalise,
   shapeOf,
   splitSentences,
   termFrequencies,
@@ -35,12 +36,38 @@ export interface IndexedCorpus {
   usable: boolean;
 }
 
+/**
+ * The unit's own heading, as plain text, or null when it has none.
+ *
+ * A `section` reference reads `§ Normalisation`; the heading itself is the rest.
+ */
+function headingOf(unit: SourceUnit): string | null {
+  if (unit.ref.kind !== "section") return null;
+
+  const heading = unit.ref.value.replace(/^§\s*/, "").trim();
+  return heading.length > 0 ? heading : null;
+}
+
+/**
+ * A unit's sentences, minus its own heading.
+ *
+ * Extraction keeps the heading at the top of the section text so a search for a
+ * Topic name finds its own section. It is a label, not a claim, and treating it
+ * as a sentence puts "1. Normalisation." at the head of a step-by-step recap and
+ * offers the bare word as an answer option. Dropping exactly the heading leaves
+ * every real statement intact.
+ */
 function sentencesOfUnit(unit: SourceUnit): Sentence[] {
-  return splitSentences(unit.text).map((text, position) => ({
-    text,
-    unitIdx: unit.index,
-    position,
-  }));
+  const heading = headingOf(unit);
+  const headingKey = heading === null ? null : normalise(heading);
+
+  return splitSentences(unit.text)
+    .filter((text) => headingKey === null || normalise(text) !== headingKey)
+    .map((text, position) => ({
+      text,
+      unitIdx: unit.index,
+      position,
+    }));
 }
 
 /**

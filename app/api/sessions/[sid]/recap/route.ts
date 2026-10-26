@@ -2,6 +2,7 @@ import { getOrGenerateRecap } from "@/lib/ai/services/recap";
 import { requireLearner } from "@/lib/http/auth";
 import { AppError } from "@/lib/http/errors";
 import { pipeline, readParams } from "@/lib/http/pipeline";
+import { getMaterial } from "@/lib/repo/material";
 import { getProfile, getSession } from "@/lib/repo/session";
 
 /**
@@ -36,6 +37,16 @@ export async function GET(
         throw new AppError(
           "PROFILE_REQUIRED",
           "Choose an understanding level and an explanation style first.",
+        );
+      }
+
+      // A class with no processed lecture has nothing to recap. Saying so beats
+      // a fallback that claims to quote material that does not exist.
+      const material = await getMaterial(session.sessionId, session.materialVersion);
+      if (!material || material.status !== "ready") {
+        throw new AppError(
+          "MATERIAL_REQUIRED",
+          "This class has no lecture material yet. Upload it on the Learn page and your recap will be built from it.",
         );
       }
 

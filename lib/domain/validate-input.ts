@@ -205,15 +205,19 @@ export function validateMaterialExtension(
  * presigned PUT carries the same 1 byte–20 MB `content-length-range`, so the
  * declared size and the enforced size agree.
  */
-export function validateDeclaredBytes(raw: unknown): ValidationResult<number> {
+export function validateDeclaredBytes(
+  raw: unknown,
+  /** A lower ceiling where the host imposes one (see `lib/ingest/limits.ts`). */
+  max: number = MATERIAL_MAX_BYTES,
+): ValidationResult<number> {
   const invalid = fail(
     "bytes",
     "MATERIAL_TOO_LARGE",
-    `File size must be between 1 byte and ${MATERIAL_MAX_BYTES} bytes (20 MB).`,
+    `File size must be between 1 byte and ${max} bytes (${Math.round(max / (1024 * 1024))} MB).`,
   );
 
   if (typeof raw !== "number" || !Number.isInteger(raw)) return invalid;
-  if (raw < 1 || raw > MATERIAL_MAX_BYTES) return invalid;
+  if (raw < 1 || raw > max) return invalid;
 
   return { ok: true, value: raw };
 }

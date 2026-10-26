@@ -3,8 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { learnerHeaders, useLearnerId } from "@/hooks/useLearnerId";
-import { button, colour, radius, space, type } from "@/lib/design/tokens";
+import { Card } from "@/components/ui/primitives";
+import { learnerFetch, useLearnerId } from "@/hooks/useLearnerId";
+import {
+  button,
+  colour,
+  eyebrow,
+  radius,
+  shadow,
+  space,
+  type,
+} from "@/lib/design/tokens";
 import {
   EXPLANATION_STYLES,
   UNDERSTANDING_LEVELS,
@@ -13,61 +22,75 @@ import {
 } from "@/lib/types";
 
 /**
- * The Learner_Profile picker: three understanding levels and five explanation
- * styles, presented as two keyboard-operable radio groups.
+ * How the recap gets written.
  *
- * Both choices are required before a Recap can be requested, so the button
- * stays disabled until each group has a selection — one click then persists the
- * profile and opens the Recap.
+ * Two questions in the Learner's own words, answered by choosing a card. The
+ * cards are real radio groups underneath — arrow keys, tab order and
+ * screen-reader semantics are the native ones, and the input is only visually
+ * hidden, never removed.
  */
 
-const LEVEL_LABELS: Record<UnderstandingLevel, { label: string; hint: string }> = {
+const CONFIDENCE: Record<UnderstandingLevel, { label: string; detail: string }> = {
   No_Understanding: {
-    label: "No understanding",
-    hint: "Start from scratch, with every term defined",
+    label: "New to it",
+    detail: "Define the terms and start from the beginning",
   },
   Basic_Understanding: {
     label: "Basic understanding",
-    hint: "I know the topic names, show me how they connect",
+    detail: "I know the names — show me how they connect",
   },
   Strong_Understanding: {
-    label: "Strong understanding",
-    hint: "Skip the basics, give me the edge cases",
+    label: "Confident",
+    detail: "Skip ahead to edge cases and conditions",
   },
 };
 
-const STYLE_LABELS: Record<ExplanationStyle, string> = {
-  Concise: "Concise",
-  Detailed: "Detailed",
-  Examples: "Examples",
-  Step_By_Step: "Step by step",
-  Visual_Structured: "Visual / diagrams",
+const STYLE: Record<ExplanationStyle, { label: string; detail: string }> = {
+  Concise: { label: "Concise", detail: "The short version" },
+  Examples: { label: "Examples", detail: "Worked cases" },
+  Step_By_Step: { label: "Step-by-step", detail: "Ordered steps" },
+  Visual_Structured: { label: "Visual", detail: "Tables and diagrams" },
+  Detailed: { label: "Detailed", detail: "The full explanation" },
 };
 
-function Choice({
+/** The order the styles are offered in, which reads better than the enum order. */
+const STYLE_ORDER: ExplanationStyle[] = [
+  "Concise",
+  "Examples",
+  "Step_By_Step",
+  "Visual_Structured",
+  "Detailed",
+];
+
+function OptionCard({
   name,
   value,
   checked,
   onChange,
   label,
-  hint,
+  detail,
+  compact,
 }: {
   name: string;
   value: string;
   checked: boolean;
   onChange: (value: string) => void;
   label: string;
-  hint?: string;
+  detail: string;
+  compact?: boolean;
 }) {
   return (
     <label
       style={{
+        position: "relative",
         display: "block",
-        padding: `${space.sm} ${space.md}`,
-        border: `1px solid ${checked ? colour.accent : colour.border}`,
-        background: checked ? colour.accentSoft : colour.surface,
-        borderRadius: radius.sm,
+        padding: compact ? space.lg : space.xl,
+        border: `1.5px solid ${checked ? colour.primary : colour.border}`,
+        background: checked ? colour.primarySoft : colour.surface,
+        borderRadius: radius.lg,
+        boxShadow: checked ? shadow.raised : shadow.card,
         cursor: "pointer",
+        transition: "border-color 120ms ease, background 120ms ease",
       }}
     >
       <input
@@ -76,14 +99,28 @@ function Choice({
         value={value}
         checked={checked}
         onChange={() => onChange(value)}
-        style={{ marginRight: space.sm }}
+        style={{
+          position: "absolute",
+          opacity: 0,
+          width: "1px",
+          height: "1px",
+          margin: "-1px",
+        }}
       />
-      <span style={{ ...type.body, fontWeight: checked ? 600 : 400 }}>{label}</span>
-      {hint ? (
-        <span style={{ ...type.small, color: colour.muted, display: "block", marginLeft: "24px" }}>
-          {hint}
-        </span>
-      ) : null}
+
+      <span
+        style={{
+          ...type.cardTitle,
+          display: "block",
+          color: checked ? colour.primaryInk : colour.text,
+          marginBottom: "3px",
+        }}
+      >
+        {label}
+      </span>
+      <span style={{ ...type.small, color: colour.muted, display: "block" }}>
+        {detail}
+      </span>
     </label>
   );
 }
@@ -114,11 +151,15 @@ export default function ProfilePicker({
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${sessionId}/profile`, {
-        method: "PUT",
-        headers: learnerHeaders(learnerId),
-        body: JSON.stringify({ understandingLevel: level, explanationStyle: style }),
-      });
+      const response = await learnerFetch(
+        sessionId,
+        learnerId,
+        `/api/sessions/${sessionId}/profile`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ understandingLevel: level, explanationStyle: style }),
+        },
+      );
 
       if (!response.ok) {
         const body = (await response.json()) as { error?: { message?: string } };
@@ -136,76 +177,106 @@ export default function ProfilePicker({
 
   if (ready && !learnerId) {
     return (
-      <p style={{ ...type.body, color: colour.muted }}>
-        Join the class from the home page to choose how your recap is written.
+      <p style={{ ...type.body, color: colour.muted, margin: 0 }}>
+        Join the class from the home page to set up your recap.
       </p>
     );
   }
 
   return (
     <div style={{ display: "grid", gap: space.lg }}>
-      <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
-        <legend style={{ ...type.heading, marginBottom: space.sm }}>
-          How well do you know this material?
-        </legend>
-        <div style={{ display: "grid", gap: space.sm }}>
-          {UNDERSTANDING_LEVELS.map((value) => (
-            <Choice
-              key={value}
-              name="understandingLevel"
-              value={value}
-              checked={level === value}
-              onChange={(next) => setLevel(next as UnderstandingLevel)}
-              label={LEVEL_LABELS[value].label}
-              hint={LEVEL_LABELS[value].hint}
-            />
-          ))}
-        </div>
-      </fieldset>
+      <Card>
+        <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+          <legend style={{ padding: 0, marginBottom: space.lg }}>
+            <span style={eyebrow}>Question 1</span>
+            <span style={{ ...type.sectionTitle, display: "block" }}>
+              How confident are you with this topic?
+            </span>
+          </legend>
 
-      <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
-        <legend style={{ ...type.heading, marginBottom: space.sm }}>
-          How would you like it explained?
-        </legend>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: space.sm,
-          }}
-        >
-          {EXPLANATION_STYLES.map((value) => (
-            <Choice
-              key={value}
-              name="explanationStyle"
-              value={value}
-              checked={style === value}
-              onChange={(next) => setStyle(next as ExplanationStyle)}
-              label={STYLE_LABELS[value]}
-            />
-          ))}
-        </div>
-      </fieldset>
+          <div
+            className="cm-grid-3"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: space.md,
+            }}
+          >
+            {UNDERSTANDING_LEVELS.map((value) => (
+              <OptionCard
+                key={value}
+                name="understandingLevel"
+                value={value}
+                checked={level === value}
+                onChange={(next) => setLevel(next as UnderstandingLevel)}
+                label={CONFIDENCE[value].label}
+                detail={CONFIDENCE[value].detail}
+              />
+            ))}
+          </div>
+        </fieldset>
+      </Card>
+
+      <Card>
+        <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+          <legend style={{ padding: 0, marginBottom: space.lg }}>
+            <span style={eyebrow}>Question 2</span>
+            <span style={{ ...type.sectionTitle, display: "block" }}>
+              How should we explain it?
+            </span>
+          </legend>
+
+          <div
+            className="cm-grid-5"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, 1fr)",
+              gap: space.sm,
+            }}
+          >
+            {STYLE_ORDER.filter((value) => EXPLANATION_STYLES.includes(value)).map(
+              (value) => (
+                <OptionCard
+                  key={value}
+                  name="explanationStyle"
+                  value={value}
+                  checked={style === value}
+                  onChange={(next) => setStyle(next as ExplanationStyle)}
+                  label={STYLE[value].label}
+                  detail={STYLE[value].detail}
+                  compact
+                />
+              ),
+            )}
+          </div>
+        </fieldset>
+      </Card>
 
       {error ? (
-        <p role="alert" style={{ ...type.small, color: colour.negative, margin: 0 }}>
+        <p role="alert" style={{ ...type.small, color: colour.weakInk, margin: 0 }}>
           {error}
         </p>
       ) : null}
 
-      <div>
+      <div style={{ display: "flex", alignItems: "center", gap: space.lg }}>
         <button
           type="button"
           onClick={save}
           disabled={!complete || busy}
           style={{
             ...button.primary,
-            opacity: complete && !busy ? 1 : 0.5,
+            opacity: complete && !busy ? 1 : 0.45,
             cursor: complete && !busy ? "pointer" : "not-allowed",
           }}
         >
-          {busy ? "Preparing your recap…" : "Show my recap"}
+          {busy ? "Writing your recap…" : "Create My Recap"}
         </button>
+
+        {!complete ? (
+          <span style={{ ...type.small, color: colour.subtle }}>
+            Choose one from each question
+          </span>
+        ) : null}
       </div>
     </div>
   );

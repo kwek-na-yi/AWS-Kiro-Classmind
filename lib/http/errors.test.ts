@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AppError,
+  asAwsError,
   ERROR_STATUS,
   errorEnvelope,
   errorResponse,
@@ -25,6 +26,12 @@ describe("the error code table", () => {
       NOT_YOUR_REPORT: 403,
       LEARNER_NOT_IN_SESSION: 403,
       INSTRUCTOR_TOKEN_REQUIRED: 403,
+      QUIZ_CLOSED: 409,
+      ANSWER_CONFLICT: 409,
+      MATERIAL_REQUIRED: 409,
+      DEMO_READ_ONLY: 403,
+      RATE_LIMITED: 429,
+      AWS_UNAVAILABLE: 503,
       INTERNAL: 500,
     });
   });
@@ -100,5 +107,44 @@ describe("the internal envelope", () => {
     expect(envelope.error.message).toContain("req-123");
     expect(envelope.error).not.toHaveProperty("stack");
     expect(envelope.error).not.toHaveProperty("field");
+  });
+});
+
+describe("recognising an AWS failure", () => {
+  /** The SDK reports its failures by `name`, not by class. */
+  function awsFailure(name: string): Error {
+    const error = new Error("the SDK said so");
+    error.name = name;
+    return error;
+  }
+
+  it("names an unusable credential as a service failure the caller can act on", () => {
+    for (const name of [
+      "UnrecognizedClientException",
+      "ExpiredToken",
+      "ExpiredTokenException",
+      "InvalidClientTokenId",
+      "AccessDeniedException",
+    ]) {
+      const mapped = asAwsError(awsFailure(name));
+
+      expect(mapped?.code).toBe("AWS_UNAVAILABLE");
+      expect(mapped?.status).toBe(503);
+      expect(mapped?.message).toMatch(/credential/i);
+    }
+  });
+
+  it("names a missing table or bucket as setup that has not been run", () => {
+    expect(asAwsError(awsFailure("ResourceNotFoundException"))?.message).toMatch(
+      /DynamoDB table/,
+    );
+    expect(asAwsError(awsFailure("NoSuchBucket"))?.message).toMatch(/S3 bucket/);
+  });
+
+  it("leaves anything else to the internal path", () => {
+    expect(asAwsError(awsFailure("ValidationException"))).toBeNull();
+    expect(asAwsError(new Error("boom"))).toBeNull();
+    expect(asAwsError("boom")).toBeNull();
+    expect(asAwsError(null)).toBeNull();
   });
 });

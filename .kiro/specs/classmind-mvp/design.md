@@ -1,5 +1,25 @@
 # Design Document: ClassMind MVP
 
+> **Implementation status (added after the competition).** This spec was written
+> with Kiro for the AWS Kiro competition and describes the *original* AWS design.
+> It is kept unchanged as a record of that design. The code as it stands differs
+> in three ways:
+>
+> - **Amazon Bedrock was never wired up** (model access was denied on the account
+>   used). All recaps, quiz items, misconception clarifications and explanation
+>   checks come from a deterministic, rule-based provider
+>   (`lib/ai/demo/provider.ts`) that selects and quotes text from the lecture —
+>   no language model is involved.
+> - **DynamoDB and S3 are optional.** By default ClassMind runs on an embedded
+>   local store (`lib/store/local.ts`) with lecture files on disk; the DynamoDB/S3
+>   adapter remains behind `CLASSMIND_TARGET=aws`. See `docs/aws-setup.md`.
+> - **No instructor UI exists.** Class sessions are created by scripts
+>   (`npm run seed`, `npm run reset:class`), and the demo classes are created
+>   automatically on first run.
+>
+> See the README for what runs today.
+
+
 ## Overview
 
 ClassMind is delivered as **one Next.js application** (App Router, TypeScript) whose server-side Route Handlers are the entire backend, talking to exactly three AWS services in the core workflow — **S3** (Lecture_Material bytes), **Bedrock** (all natural-language generation and Peer_Explanation assessment), and **DynamoDB** (every other piece of application and learning data) — plus **CloudWatch Logs** as the mandated failure-logging destination (Requirement 12.10).

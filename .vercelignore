@@ -1,0 +1,19 @@
+# Never upload credentials or local data with a CLI deployment.
+.env
+.env.*
+!.env.example
+!.env.aws.example
+.aws/
+credentials
+*.pem
+.classmind/
+
+# Build output, dependencies and test artefacts are rebuilt on Vercel.
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+*.tsbuildinfo
+*.log

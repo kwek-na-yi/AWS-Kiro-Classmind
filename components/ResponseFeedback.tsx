@@ -1,11 +1,15 @@
 "use client";
 
 import { DifficultyPill, type FeedbackView } from "@/components/QuizItemCard";
+import { IconArrowRight } from "@/components/ui/icons";
 import { button, colour, radius, space, type } from "@/lib/design/tokens";
 
 /**
- * Per-answer feedback: whether the answer was right, what the material actually
- * says, where to find it, and the level of the next question.
+ * What the material actually says, shown the moment an answer is submitted.
+ *
+ * The verdict is stated in words as well as colour, the source is named so the
+ * Learner can go and read it, and the next question's level is shown — which is
+ * where the quiz makes its adaptivity visible.
  */
 export default function ResponseFeedback({
   feedback,
@@ -17,42 +21,80 @@ export default function ResponseFeedback({
   busy: boolean;
 }) {
   const tone = feedback.isCorrect
-    ? { background: colour.positiveSoft, colour: colour.positive, label: "Correct" }
-    : { background: colour.negativeSoft, colour: colour.negative, label: "Not quite" };
+    ? {
+        background: colour.strongSoft,
+        border: colour.strongBorder,
+        ink: colour.strongInk,
+        label: "Correct",
+      }
+    : {
+        background: colour.weakSoft,
+        border: colour.weakBorder,
+        ink: colour.weakInk,
+        label: "Not quite",
+      };
 
   return (
     <section
       aria-live="polite"
       style={{
         background: tone.background,
-        border: `1px solid ${tone.colour}22`,
-        borderRadius: radius.md,
-        padding: space.lg,
+        border: `1px solid ${tone.border}`,
+        borderLeft: `4px solid ${tone.ink}`,
+        borderRadius: radius.lg,
+        padding: space.xl,
         display: "grid",
         gap: space.md,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: space.sm }}>
-        <strong style={{ ...type.heading, color: tone.colour }}>{tone.label}</strong>
+      <div style={{ display: "flex", alignItems: "center", gap: space.md }}>
+        <strong style={{ ...type.sectionTitle, color: tone.ink }}>{tone.label}</strong>
         <span style={{ ...type.small, color: colour.muted }}>
           Source: {feedback.sourceRef.value}
         </span>
       </div>
 
       {!feedback.isCorrect && feedback.correctOptionText ? (
-        <p style={{ ...type.body, margin: 0 }}>
-          The lecture material says: {feedback.correctOptionText}
+        <p style={{ ...type.body, margin: 0, maxWidth: "72ch" }}>
+          <span style={{ color: colour.muted }}>The material says: </span>
+          {feedback.correctOptionText}
         </p>
       ) : null}
 
-      <div style={{ display: "flex", alignItems: "center", gap: space.md }}>
-        <button type="button" onClick={onContinue} disabled={busy} style={button.primary}>
-          {feedback.closed ? "See my results" : "Next question"}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: space.lg,
+          marginTop: space.xs,
+        }}
+      >
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={busy}
+          style={{
+            ...button.primary,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: space.sm,
+          }}
+        >
+          {feedback.closed ? "See what I understand" : "Next question"}
+          <IconArrowRight size={16} />
         </button>
 
         {!feedback.closed ? (
-          <span style={{ ...type.small, color: colour.muted }}>
-            Next question: <DifficultyPill level={feedback.nextDifficulty} />
+          <span
+            style={{
+              ...type.small,
+              color: colour.muted,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: space.sm,
+            }}
+          >
+            Next up <DifficultyPill level={feedback.nextDifficulty} />
           </span>
         ) : null}
       </div>

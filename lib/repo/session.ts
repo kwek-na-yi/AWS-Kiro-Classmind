@@ -1,8 +1,5 @@
 import "server-only";
 
-import { TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-
-import { ddb, tableName } from "@/lib/aws/ddb";
 import {
   joinCodeKey,
   learnerSk,
@@ -16,6 +13,8 @@ import {
   isConditionalCheckFailure,
   putItem,
   queryPrefix,
+  transactWrite,
+  updateItem,
   type Item,
 } from "@/lib/repo/table";
 import type {
@@ -135,20 +134,10 @@ export async function createSession(input: NewSession): Promise<ClassSession> {
   };
 
   try {
-    await ddb().send(
-      new TransactWriteCommand({
-        TransactItems: [
-          { Put: { TableName: tableName(), Item: meta } },
-          {
-            Put: {
-              TableName: tableName(),
-              Item: pointer,
-              ConditionExpression: "attribute_not_exists(PK)",
-            },
-          },
-        ],
-      }),
-    );
+    await transactWrite([
+      { kind: "put", item: meta },
+      { kind: "put", item: pointer, condition: { exists: false } },
+    ]);
   } catch (error) {
     if (isConditionalCheckFailure(error)) {
       throw new JoinCodeTakenError(input.joinCode);
@@ -196,15 +185,10 @@ export async function setMaterialVersion(
   sessionId: string,
   materialVersion: number,
 ): Promise<void> {
-  await ddb().send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: { PK: sessionPk(sessionId), SK: metaSk() },
-      UpdateExpression: "SET #materialVersion = :v",
-      ConditionExpression: "attribute_exists(PK)",
-      ExpressionAttributeNames: { "#materialVersion": "materialVersion" },
-      ExpressionAttributeValues: { ":v": materialVersion },
-    }),
+  await updateItem(
+    { PK: sessionPk(sessionId), SK: metaSk() },
+    { set: { materialVersion } },
+    { exists: true },
   );
 }
 

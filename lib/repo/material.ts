@@ -1,8 +1,5 @@
 import "server-only";
 
-import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
-
-import { ddb, tableName } from "@/lib/aws/ddb";
 import {
   materialSk,
   parseTopicSk,
@@ -14,11 +11,13 @@ import {
   unitSk,
 } from "@/lib/repo/keys";
 import {
+  deleteAll,
   getItem,
   isConditionalCheckFailure,
   putAll,
   putItem,
   queryPrefix,
+  updateItem,
   type Item,
 } from "@/lib/repo/table";
 import type {
@@ -82,6 +81,10 @@ interface RecapItem extends Item {
 // Lecture_Material
 // ---------------------------------------------------------------------------
 
+function materialKey(sessionId: string, version: number) {
+  return { PK: sessionPk(sessionId), SK: materialSk(version) };
+}
+
 export async function putMaterial(
   sessionId: string,
   material: LectureMaterial,
@@ -131,15 +134,7 @@ export async function setMaterialStage(
   version: number,
   stage: ProcessingStage,
 ): Promise<void> {
-  await ddb().send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: { PK: sessionPk(sessionId), SK: materialSk(version) },
-      UpdateExpression: "SET #stage = :stage",
-      ExpressionAttributeNames: { "#stage": "stage" },
-      ExpressionAttributeValues: { ":stage": stage },
-    }),
-  );
+  await updateItem(materialKey(sessionId, version), { set: { stage } });
 }
 
 /** Records the outcome of extraction: status plus the measured counts. */
@@ -153,38 +148,12 @@ export async function setMaterialStatus(
     unitCount?: number;
   },
 ): Promise<void> {
-  // Every attribute name is aliased: `status` is a DynamoDB reserved word, and
-  // aliasing the rest keeps one rule rather than a list of exceptions. Unused
-  // alias entries are a validation error, so names are added with their clause.
-  const sets = ["#status = :status"];
-  const names: Record<string, string> = { "#status": "status" };
-  const values: Record<string, unknown> = { ":status": update.status };
+  const set: Record<string, unknown> = { status: update.status };
+  if (update.stage !== undefined) set.stage = update.stage;
+  if (update.charCount !== undefined) set.charCount = update.charCount;
+  if (update.unitCount !== undefined) set.unitCount = update.unitCount;
 
-  if (update.stage !== undefined) {
-    sets.push("#stage = :stage");
-    names["#stage"] = "stage";
-    values[":stage"] = update.stage;
-  }
-  if (update.charCount !== undefined) {
-    sets.push("#charCount = :charCount");
-    names["#charCount"] = "charCount";
-    values[":charCount"] = update.charCount;
-  }
-  if (update.unitCount !== undefined) {
-    sets.push("#unitCount = :unitCount");
-    names["#unitCount"] = "unitCount";
-    values[":unitCount"] = update.unitCount;
-  }
-
-  await ddb().send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: { PK: sessionPk(sessionId), SK: materialSk(version) },
-      UpdateExpression: `SET ${sets.join(", ")}`,
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
-    }),
-  );
+  await updateItem(materialKey(sessionId, version), { set });
 }
 
 /**
@@ -201,18 +170,10 @@ export async function transitionPoolStatus(
   transition: { from: PoolStatus; to: PoolStatus },
 ): Promise<boolean> {
   try {
-    await ddb().send(
-      new UpdateCommand({
-        TableName: tableName(),
-        Key: { PK: sessionPk(sessionId), SK: materialSk(version) },
-        UpdateExpression: "SET #poolStatus = :to",
-        ConditionExpression: "#poolStatus = :from",
-        ExpressionAttributeNames: { "#poolStatus": "poolStatus" },
-        ExpressionAttributeValues: {
-          ":to": transition.to,
-          ":from": transition.from,
-        },
-      }),
+    await updateItem(
+      materialKey(sessionId, version),
+      { set: { poolStatus: transition.to } },
+      { equals: { poolStatus: transition.from } },
     );
     return true;
   } catch (error) {
@@ -227,15 +188,7 @@ export async function setPoolStatus(
   version: number,
   poolStatus: PoolStatus,
 ): Promise<void> {
-  await ddb().send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: { PK: sessionPk(sessionId), SK: materialSk(version) },
-      UpdateExpression: "SET #poolStatus = :s",
-      ExpressionAttributeNames: { "#poolStatus": "poolStatus" },
-      ExpressionAttributeValues: { ":s": poolStatus },
-    }),
-  );
+  await updateItem(materialKey(sessionId, version), { set: { poolStatus } });
 }
 
 // ---------------------------------------------------------------------------
@@ -373,4 +326,41 @@ export async function putRecap(recap: Recap): Promise<void> {
   };
 
   await putItem(item);
+}
+
+/**
+ * Removes everything derived from one Lecture_Material version: the Quiz_Pool,
+ * every retained Recap variant and every cached misconception clarification.
+ *
+ * The material record, its source units and its Topics are left in place — they
+ * are rewritten by key, so they replace themselves.
+ *
+ * This is what makes regeneration idempotent. A Quiz_Item's id is derived from
+ * its own text, so regenerating a pool from changed source text produces items
+ * under *new* keys and the previous generation stays behind: the pool grows on
+ * every run, and a Learner can be served a question built from source text that
+ * no longer exists. The same applies to a retained Recap, which would otherwise
+ * keep serving prose grounded in the superseded extraction.
+ */
+export async function purgeGeneratedForVersion(
+  sessionId: string,
+  version: number,
+): Promise<number> {
+  const groups = [
+    prefixes.quizItems(version),
+    prefixes.recaps(version),
+    prefixes.misconceptions(version),
+  ];
+
+  const keys: { PK: string; SK: string }[] = [];
+
+  for (const prefix of groups) {
+    for (const item of await queryPrefix(sessionId, prefix)) {
+      keys.push({ PK: String(item.PK), SK: String(item.SK) });
+    }
+  }
+
+  if (keys.length > 0) await deleteAll(keys);
+
+  return keys.length;
 }

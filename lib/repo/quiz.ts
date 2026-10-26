@@ -1,8 +1,5 @@
 import "server-only";
 
-import { TransactWriteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-
-import { ddb, tableName } from "@/lib/aws/ddb";
 import {
   parseResponseSk,
   prefixes,
@@ -10,7 +7,15 @@ import {
   responseSk,
   sessionPk,
 } from "@/lib/repo/keys";
-import { getItem, putItem, queryPrefix, type Item } from "@/lib/repo/table";
+import {
+  getItem,
+  isConditionalCheckFailure,
+  putItem,
+  queryPrefix,
+  transactWrite,
+  updateItem,
+  type Item,
+} from "@/lib/repo/table";
 import type {
   DifficultyLevel,
   QuizResponse,
@@ -85,22 +90,6 @@ function toResponse(item: ResponseItem): QuizResponse | null {
     difficultyServed: item.difficultyServed,
     submittedAt: item.submittedAt,
   };
-}
-
-/**
- * Whether a cancelled transaction was cancelled by a failed condition rather
- * than by throttling or a conflict — the difference between "this Quiz_Item is
- * already answered" and a genuine fault that must surface.
- */
-function isConditionalCancellation(error: unknown): boolean {
-  if (!(error instanceof Error) || error.name !== "TransactionCanceledException") {
-    return false;
-  }
-
-  const reasons = (error as { CancellationReasons?: { Code?: string }[] })
-    .CancellationReasons;
-
-  return Boolean(reasons?.some((reason) => reason.Code === "ConditionalCheckFailed"));
 }
 
 // ---------------------------------------------------------------------------
@@ -179,19 +168,10 @@ export async function markItemServed(
   quizSessionId: string,
   quizItemId: string,
 ): Promise<void> {
-  await ddb().send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: {
-        PK: sessionPk(sessionId),
-        SK: quizSessionSk(learnerId, quizSessionId),
-      },
-      UpdateExpression:
-        "SET #servedItemIds = list_append(if_not_exists(#servedItemIds, :empty), :served)",
-      ConditionExpression: "attribute_exists(SK)",
-      ExpressionAttributeNames: { "#servedItemIds": "servedItemIds" },
-      ExpressionAttributeValues: { ":empty": [], ":served": [quizItemId] },
-    }),
+  await updateItem(
+    { PK: sessionPk(sessionId), SK: quizSessionSk(learnerId, quizSessionId) },
+    { appendToList: { servedItemIds: [quizItemId] } },
+    { exists: true },
   );
 }
 
@@ -225,30 +205,12 @@ export async function recordResponse(
 ): Promise<boolean> {
   const { response, next, close } = input;
 
-  const sets = [
-    "#currentDifficulty = :difficulty",
-    "#runKind = :runKind",
-    "#runLen = :runLen",
-  ];
-  const names: Record<string, string> = {
-    "#currentDifficulty": "currentDifficulty",
-    "#runKind": "runKind",
-    "#runLen": "runLen",
-    "#answeredItemIds": "answeredItemIds",
+  const set: Record<string, unknown> = {
+    currentDifficulty: next.currentDifficulty,
+    runKind: next.runKind,
+    runLen: next.runLen,
   };
-  const values: Record<string, unknown> = {
-    ":difficulty": next.currentDifficulty,
-    ":runKind": next.runKind,
-    ":runLen": next.runLen,
-    ":itemId": response.quizItemId,
-    ":itemIds": new Set([response.quizItemId]),
-  };
-
-  if (close) {
-    sets.push("#status = :status");
-    names["#status"] = "status";
-    values[":status"] = "closed" satisfies QuizSessionStatus;
-  }
+  if (close) set.status = "closed" satisfies QuizSessionStatus;
 
   const responseItem: ResponseItem = {
     PK: sessionPk(sessionId),
@@ -263,36 +225,21 @@ export async function recordResponse(
   };
 
   try {
-    await ddb().send(
-      new TransactWriteCommand({
-        TransactItems: [
-          {
-            Update: {
-              TableName: tableName(),
-              Key: {
-                PK: sessionPk(sessionId),
-                SK: quizSessionSk(response.learnerId, response.quizSessionId),
-              },
-              UpdateExpression: `SET ${sets.join(", ")} ADD #answeredItemIds :itemIds`,
-              ConditionExpression:
-                "attribute_exists(SK) AND NOT contains(#answeredItemIds, :itemId)",
-              ExpressionAttributeNames: names,
-              ExpressionAttributeValues: values,
-            },
-          },
-          {
-            Put: {
-              TableName: tableName(),
-              Item: responseItem,
-              ConditionExpression: "attribute_not_exists(SK)",
-            },
-          },
-        ],
-      }),
-    );
+    await transactWrite([
+      {
+        kind: "update",
+        key: {
+          PK: sessionPk(sessionId),
+          SK: quizSessionSk(response.learnerId, response.quizSessionId),
+        },
+        update: { set, addToSet: { answeredItemIds: [response.quizItemId] } },
+        condition: { exists: true, notContains: { answeredItemIds: response.quizItemId } },
+      },
+      { kind: "put", item: responseItem, condition: { exists: false } },
+    ]);
     return true;
   } catch (error) {
-    if (isConditionalCancellation(error)) return false;
+    if (isConditionalCheckFailure(error)) return false;
     throw error;
   }
 }

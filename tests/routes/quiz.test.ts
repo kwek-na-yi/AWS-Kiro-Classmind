@@ -376,6 +376,12 @@ describe("a full six-question session", () => {
     expect(repeat.response.status).toBe(200);
     expect(repeat.body.duplicate).toBe(true);
     expect(repeat.body.index).toBe(1);
+    // Regression: the feedback for the repeat described the *new* option ("b",
+    // wrong) while the recorded answer was the first one ("a", right).
+    expect(repeat.body.isCorrect).toBe(true);
+    expect(repeat.body.nextDifficulty).toBe(first.body.nextDifficulty);
+    expect(store.responses).toHaveLength(1);
+    expect((store.responses[0] as QuizResponse).optionId).toBe("a");
   });
 
   it("rejects an answer naming a question outside the pool", async () => {
@@ -383,6 +389,48 @@ describe("a full six-question session", () => {
     const { response } = await answer(started.quizSessionId, "no-such-item", "a");
 
     expect(response.status).toBe(404);
+  });
+
+  it("rejects an answer to a pool question this session never served", async () => {
+    // Regression: any pool item could be answered, bypassing the adaptive engine.
+    const { body: started } = await start();
+    const qsid = started.quizSessionId as string;
+    const { body: question } = await next(qsid);
+
+    const unserved = POOL.find((item) => item.quizItemId !== question.item.id) as QuizItem;
+    const { response } = await answer(qsid, unserved.quizItemId, "a");
+
+    expect(response.status).toBe(404);
+    expect(store.responses).toHaveLength(0);
+  });
+
+  it("serves the pending question again instead of skipping it", async () => {
+    // Regression: a second "next" before answering discarded the question.
+    const { body: started } = await start();
+    const qsid = started.quizSessionId as string;
+
+    const first = await next(qsid);
+    const again = await next(qsid);
+
+    expect(again.body.item.id).toBe(first.body.item.id);
+    expect(again.body.index).toBe(1);
+    const session = store.quizSessions.get(`${LEARNER}/${qsid}`) as QuizSession;
+    expect(session.servedItemIds).toEqual([first.body.item.id]);
+  });
+
+  it("refuses answers once the session is closed, leaving the report intact", async () => {
+    // Regression: a seventh answer was recorded and the report rebuilt from it.
+    const { qsid } = await playThrough(() => "correct");
+    const reportBefore = store.reports.get(`${LEARNER}/${qsid}`);
+
+    // Force an extra served item, as a stale or crafted client could.
+    await quizRepo.markItemServed("demo", LEARNER, qsid, "gamma-d1-2");
+    const { response, body } = await answer(qsid, "gamma-d1-2", "b");
+
+    expect(response.status).toBe(409);
+    expect(body.error.code).toBe("QUIZ_CLOSED");
+    expect(store.responses).toHaveLength(6);
+    expect(store.reports.get(`${LEARNER}/${qsid}`)).toEqual(reportBefore);
   });
 });
 

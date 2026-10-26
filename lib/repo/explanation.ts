@@ -1,13 +1,11 @@
 import "server-only";
 
-import { UpdateCommand } from "@aws-sdk/lib-dynamodb";
-
-import { ddb, tableName } from "@/lib/aws/ddb";
 import { explanationSk, parseExplanationSk, prefixes, sessionPk } from "@/lib/repo/keys";
 import {
   isConditionalCheckFailure,
   putItem,
   queryPrefix,
+  updateItem,
   type Item,
 } from "@/lib/repo/table";
 import type { PeerExplanation, SourceRef, ValidationStatus } from "@/lib/types";
@@ -128,15 +126,10 @@ export async function claimValidation(
   key: ExplanationKey,
 ): Promise<boolean> {
   try {
-    await ddb().send(
-      new UpdateCommand({
-        TableName: tableName(),
-        Key: keyOf(sessionId, key),
-        UpdateExpression: "SET #attempts = #attempts + :one",
-        ConditionExpression: "attribute_exists(SK) AND #attempts = :zero",
-        ExpressionAttributeNames: { "#attempts": "attempts" },
-        ExpressionAttributeValues: { ":one": 1, ":zero": 0 },
-      }),
+    await updateItem(
+      keyOf(sessionId, key),
+      { increment: { attempts: 1 } },
+      { exists: true, equals: { attempts: 0 } },
     );
     return true;
   } catch (error) {
@@ -154,29 +147,9 @@ export async function resolveValidation(
   key: ExplanationKey,
   outcome: { status: ValidationStatus; sourceRef?: SourceRef; reason?: string },
 ): Promise<void> {
-  const sets = ["#status = :status"];
-  const names: Record<string, string> = { "#status": "status" };
-  const values: Record<string, unknown> = { ":status": outcome.status };
+  const set: Record<string, unknown> = { status: outcome.status };
+  if (outcome.sourceRef !== undefined) set.sourceRef = outcome.sourceRef;
+  if (outcome.reason !== undefined) set.reason = outcome.reason;
 
-  if (outcome.sourceRef !== undefined) {
-    sets.push("#sourceRef = :sourceRef");
-    names["#sourceRef"] = "sourceRef";
-    values[":sourceRef"] = outcome.sourceRef;
-  }
-  if (outcome.reason !== undefined) {
-    sets.push("#reason = :reason");
-    names["#reason"] = "reason";
-    values[":reason"] = outcome.reason;
-  }
-
-  await ddb().send(
-    new UpdateCommand({
-      TableName: tableName(),
-      Key: keyOf(sessionId, key),
-      UpdateExpression: `SET ${sets.join(", ")}`,
-      ConditionExpression: "attribute_exists(SK)",
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
-    }),
-  );
+  await updateItem(keyOf(sessionId, key), { set }, { exists: true });
 }

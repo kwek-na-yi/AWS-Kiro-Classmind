@@ -31,6 +31,12 @@ export const ERROR_STATUS = {
   NOT_YOUR_REPORT: 403,
   LEARNER_NOT_IN_SESSION: 403,
   INSTRUCTOR_TOKEN_REQUIRED: 403,
+  QUIZ_CLOSED: 409,
+  ANSWER_CONFLICT: 409,
+  MATERIAL_REQUIRED: 409,
+  DEMO_READ_ONLY: 403,
+  RATE_LIMITED: 429,
+  AWS_UNAVAILABLE: 503,
   INTERNAL: 500,
 } as const satisfies Record<string, number>;
 
@@ -104,6 +110,60 @@ export function internalEnvelope(requestId: string): ErrorEnvelope {
       message: `Something went wrong. Reference: ${requestId}`,
     },
   };
+}
+
+/**
+ * AWS SDK error names that mean "the credentials are not usable", as opposed to
+ * "the request was wrong".
+ *
+ * The account this runs in issues session credentials that expire after a few
+ * hours, so this is the single most likely runtime failure — and the one a
+ * generic 500 explains worst. Naming it turns a mystifying "something went
+ * wrong" into a sentence that says which action to take.
+ */
+const CREDENTIAL_ERROR_NAMES = new Set([
+  "UnrecognizedClientException",
+  "InvalidClientTokenId",
+  "ExpiredToken",
+  "ExpiredTokenException",
+  "InvalidAccessKeyId",
+  "SignatureDoesNotMatch",
+  "CredentialsProviderError",
+  "AccessDenied",
+  "AccessDeniedException",
+]);
+
+/**
+ * Recognises an AWS failure the caller should be told about plainly, and
+ * returns it as a coded error. Returns null for anything else, which the
+ * pipeline then treats as an internal failure as before.
+ */
+export function asAwsError(error: unknown): AppError | null {
+  if (!(error instanceof Error)) return null;
+
+  if (CREDENTIAL_ERROR_NAMES.has(error.name)) {
+    return new AppError(
+      "AWS_UNAVAILABLE",
+      "ClassMind could not reach its AWS data store: the credentials are invalid or have expired. " +
+        "Refresh the AWS session credentials and restart the server.",
+    );
+  }
+
+  if (error.name === "ResourceNotFoundException") {
+    return new AppError(
+      "AWS_UNAVAILABLE",
+      "The ClassMind DynamoDB table does not exist in this region. Run the setup and seed steps first.",
+    );
+  }
+
+  if (error.name === "NoSuchBucket") {
+    return new AppError(
+      "AWS_UNAVAILABLE",
+      "The ClassMind S3 bucket does not exist in this region. Run the setup and seed steps first.",
+    );
+  }
+
+  return null;
 }
 
 /** Serialises a coded failure as a JSON `Response`. */

@@ -12,22 +12,39 @@ build/
 dist/
 
 # environment variables (server-only; never NEXT_PUBLIC_)
+# .env.aws holds AWS session credentials — never commit it.
 .env
 .env.*
-!.env.local.example
+!.env.example
+!.env.aws.example
+
+# AWS credential files, in case one is ever copied into the project
+.aws/
+credentials
+*.pem
 
 # typescript
 next-env.d.ts
 *.tsbuildinfo
 
-# logs
+# logs and scratch output
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+lint*.json
+lint*.txt
+probe.txt
+tree.txt
+
+# local-mode data: the embedded store and uploaded lecture files
+.classmind/
 
 # testing / coverage
 coverage/
+playwright-report/
+test-results/
+blob-report/
 
 # os / editor cruft
 .DS_Store
@@ -38,5 +55,5 @@ desktop.ini
 !.vscode/extensions.json
 *.swp
 
-# vercel
+# vercel (project link; `.env*` above already covers pulled env files)
 .vercel

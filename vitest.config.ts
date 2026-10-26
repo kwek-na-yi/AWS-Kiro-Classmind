@@ -12,7 +12,7 @@ export default defineConfig({
     // running against mocked AWS, so no DOM environment is needed.
     environment: "node",
     include: ["**/*.test.ts", "**/*.test.tsx"],
-    exclude: ["node_modules/**", ".next/**"],
+    exclude: ["node_modules/**", ".next/**", "e2e/**"],
     setupFiles: ["./tests/setup.ts"],
   },
   resolve: {

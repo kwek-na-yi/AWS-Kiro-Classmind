@@ -1,0 +1,86 @@
+# What never enters the build context.
+#
+# Everything here is excluded from the context Docker sends to the daemon, so
+# these files cannot reach any stage of the build — not even a layer that is
+# later discarded, where a leaked credential would still sit in the build cache.
+
+# --- Secrets. The reason this file matters. -------------------------------
+#
+# `.env.aws` holds live AWS session credentials and `.env.local` points
+# DynamoDB at localhost. Neither may enter an image: the SDK resolves
+# credentials at run time from the standard provider chain, and every other
+# variable is supplied with `--env-file` or the task definition. Nothing is
+# read at build time — no value in this project is prefixed NEXT_PUBLIC_ — so
+# excluding them costs the build nothing.
+.env
+.env.*
+!.env.example
+!.env.aws.example
+.aws/
+*.pem
+*.key
+credentials
+
+# --- Build output and caches ----------------------------------------------
+#
+# `next build` runs inside the image. A host `.next` would be copied in and
+# then overwritten, and a host `node_modules` may hold platform-specific
+# binaries built for Windows.
+node_modules/
+.next/
+out/
+build/
+dist/
+.turbo/
+*.tsbuildinfo
+.swc/
+
+# --- Tests -----------------------------------------------------------------
+#
+# The running server never touches them. `tests/fixtures/demo-lecture.md` is
+# read only by `npm run seed:aws`, which is a host-side operation against AWS —
+# see the note in docs/aws-setup.md. Delete these two lines if you ever want to
+# seed from inside the container.
+tests/
+**/*.test.ts
+**/*.test.tsx
+coverage/
+vitest.config.ts
+
+# --- Version control, editors, tooling -------------------------------------
+.git/
+.gitignore
+.gitattributes
+.github/
+.idea/
+.vscode/
+.kiro/
+eslint.config.mjs
+lint.json
+
+# --- Logs and scratch ------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+tree.txt
+probe.txt
+lint-*.txt
+
+# --- Documentation ---------------------------------------------------------
+*.md
+docs/
+# …except the synthetic demo lecture, which local mode builds the demo class from.
+!lib/demo/demo-lecture.md
+
+# --- Local-mode data (embedded store, uploads) — never baked into an image --
+.classmind/
+playwright-report/
+test-results/
+
+# --- Docker's own files ----------------------------------------------------
+#
+# Editing the Dockerfile should not invalidate the layer that copies the source.
+Dockerfile
+.dockerignore
+.vercel/

@@ -35,6 +35,37 @@ describe("splitSentences", () => {
     ]);
   });
 
+  it("rejoins a sentence a writer hard-wrapped across lines", () => {
+    const wrapped =
+      "A table is in first normal\nform when every column holds a single atomic\nvalue.";
+
+    expect(splitSentences(wrapped)).toEqual([
+      "A table is in first normal form when every column holds a single atomic value.",
+    ]);
+  });
+
+  it("never joins a heading to the paragraph beneath it", () => {
+    // Gluing these produces "Normalisation Normalisation organises …", which
+    // reads as a stutter and names its own topic in the first word.
+    const text = "# Normalisation\nNormalisation organises the columns and tables.";
+
+    expect(splitSentences(text)).toEqual([
+      "# Normalisation",
+      "Normalisation organises the columns and tables.",
+    ]);
+  });
+
+  it("keeps blocks apart when unwrapping", () => {
+    const text = "Intro line\ncontinues here.\n\n- A bullet\n- Another bullet\n# Heading";
+
+    expect(splitSentences(text)).toEqual([
+      "Intro line continues here.",
+      "A bullet",
+      "Another bullet",
+      "# Heading",
+    ]);
+  });
+
   it("returns nothing for empty or whitespace text", () => {
     expect(splitSentences("")).toEqual([]);
     expect(splitSentences("   \n\t  ")).toEqual([]);

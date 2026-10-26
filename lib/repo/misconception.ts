@@ -1,10 +1,7 @@
 import "server-only";
 
-import { BatchGetCommand } from "@aws-sdk/lib-dynamodb";
-
-import { ddb, tableName } from "@/lib/aws/ddb";
 import { misconceptionSk, parseMisconceptionSk, sessionPk } from "@/lib/repo/keys";
-import { getItem, putItem, type Item } from "@/lib/repo/table";
+import { getItem, getItems, putItem, type Item } from "@/lib/repo/table";
 import type { SourceRef } from "@/lib/types";
 
 /**
@@ -69,20 +66,12 @@ export async function getClarifications(
 ): Promise<Clarification[]> {
   if (refs.length === 0) return [];
 
-  const result = await ddb().send(
-    new BatchGetCommand({
-      RequestItems: {
-        [tableName()]: {
-          Keys: refs.map((ref) => ({
-            PK: sessionPk(sessionId),
-            SK: misconceptionSk(version, ref.quizItemId, ref.optionId),
-          })),
-        },
-      },
-    }),
+  const items = await getItems<ClarificationItem>(
+    refs.map((ref) => ({
+      PK: sessionPk(sessionId),
+      SK: misconceptionSk(version, ref.quizItemId, ref.optionId),
+    })),
   );
-
-  const items = (result.Responses?.[tableName()] ?? []) as ClarificationItem[];
 
   return items.flatMap((item) => {
     const parsed = parseMisconceptionSk(String(item.SK));

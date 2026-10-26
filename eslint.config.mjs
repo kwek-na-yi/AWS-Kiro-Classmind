@@ -10,6 +10,21 @@ import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypeScript from "eslint-config-next/typescript";
 
 /** @type {import("eslint").Linter.Config[]} */
-const eslintConfig = [...nextCoreWebVitals, ...nextTypeScript];
+const eslintConfig = [
+  ...nextCoreWebVitals,
+  ...nextTypeScript,
+  // Generated output and local data, never source: Playwright's HTML report
+  // ships minified bundles that would otherwise drown real findings.
+  {
+    ignores: [
+      "playwright-report/**",
+      "test-results/**",
+      "blob-report/**",
+      "coverage/**",
+      ".classmind/**",
+      ".vercel/**",
+    ],
+  },
+];
 
 export default eslintConfig;

@@ -328,6 +328,7 @@ describe("begins_with prefixes", () => {
     expect(misconceptionSk(2, "qi_1", "b").startsWith(prefixes.misconceptions(2))).toBe(true);
     expect(materialSk(2).startsWith(prefixes.material(2))).toBe(true);
     expect(learnerSk("l_1").startsWith(prefixes.learners())).toBe(true);
+    expect(profileSk("l_1").startsWith(prefixes.profiles())).toBe(true);
     expect(quizSessionSk("l_1", "qs_1").startsWith(prefixes.quizSessions("l_1"))).toBe(true);
     expect(quizSessionSk("l_1", "qs_1").startsWith(prefixes.quizSessions())).toBe(true);
     expect(responseSk("qs_1", 1).startsWith(prefixes.responses("qs_1"))).toBe(true);

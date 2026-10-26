@@ -1,0 +1,166 @@
+/**
+ * Global styles.
+ *
+ * Deliberately small. Component styling lives in the design tokens; this file
+ * carries only what inline styles cannot express — resets, focus rings, and the
+ * responsive rules that collapse the sidebar.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  text-rendering: optimizeLegibility;
+}
+
+/* A single visible focus ring across the product, drawn only for keyboard use. */
+:focus-visible {
+  outline: 2px solid #7497df;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* A card wrapping a radio input shows the ring when that input is focused. */
+label:has(input:focus-visible) {
+  outline: 2px solid #7497df;
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}
+
+/* Inputs inherit the product's type rather than the browser's. */
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #98a2b3;
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive
+
+   The sidebar is a full-height rail on desktop. Below 900px it becomes a
+   horizontal strip above the content, keeping every destination reachable
+   without a menu to open.
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .cm-shell {
+    flex-direction: column;
+  }
+
+  .cm-sidebar {
+    width: 100% !important;
+    height: auto !important;
+    position: static !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid #e6eaf0;
+  }
+
+  .cm-sidebar > div:first-child {
+    padding-bottom: 8px;
+  }
+
+  .cm-nav-list {
+    display: flex !important;
+    overflow-x: auto;
+    padding-bottom: 8px !important;
+    gap: 4px !important;
+  }
+
+  .cm-nav-list a,
+  .cm-nav-list span[aria-disabled] {
+    white-space: nowrap;
+  }
+
+  /* The profile block is redundant once the rail is a strip. */
+  .cm-sidebar-foot {
+    display: none !important;
+  }
+
+  .cm-main {
+    padding: 24px 20px 48px !important;
+  }
+}
+
+/* Multi-column groups fold to a single column on narrow screens. */
+@media (max-width: 900px) {
+  .cm-grid-3,
+  .cm-grid-2,
+  .cm-grid-5,
+  .cm-split {
+    grid-template-columns: 1fr !important;
+  }
+
+  .cm-hero {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .cm-grid-5 {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+/* Anchored sections should not sit under a sticky header when jumped to. */
+[id^="topic-"] {
+  scroll-margin-top: 24px;
+}
+
+/* ---------------------------------------------------------------------------
+   Waiting
+
+   The spinner and the skeleton shimmer used by the shared Loading primitive.
+   Both are motion, so both stop under a reduced-motion preference below.
+   --------------------------------------------------------------------------- */
+
+@keyframes cm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.cm-skeleton {
+  animation: cm-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  /* A frozen pulse must not leave the placeholder half-faded. */
+  .cm-skeleton {
+    opacity: 1;
+  }
+}

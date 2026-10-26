@@ -462,6 +462,11 @@ export const prefixes = {
     return `LEARNER${SEP}`;
   },
 
+  /** Every Learner_Profile in the Class_Session. */
+  profiles(): string {
+    return `PROFILE${SEP}`;
+  },
+
   /** One Learner's Quiz_Sessions, or every Quiz_Session in the Class_Session. */
   quizSessions(learnerId?: string): string {
     return learnerId === undefined
@@ -480,9 +485,11 @@ export const prefixes = {
       : `RESP${SEP}${component("quizSessionId", quizSessionId)}${SEP}`;
   },
 
-  /** One Learner's Understanding_Reports. */
-  reports(learnerId: string): string {
-    return `REPORT${SEP}${component("learnerId", learnerId)}${SEP}`;
+  /** One Learner's Understanding_Reports, or every report in the session. */
+  reports(learnerId?: string): string {
+    return learnerId === undefined
+      ? `REPORT${SEP}`
+      : `REPORT${SEP}${component("learnerId", learnerId)}${SEP}`;
   },
 
   /** Access pattern 23 with a Topic: one Study_Thread. Access pattern 24 without: all threads. */

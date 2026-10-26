@@ -4,26 +4,40 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 
 import QuizItemCard, {
+  DifficultyPill,
   type FeedbackView,
   type QuizItemView,
 } from "@/components/QuizItemCard";
 import ResponseFeedback from "@/components/ResponseFeedback";
 import UnderstandingReport, { type ReportView } from "@/components/UnderstandingReport";
-import { learnerHeaders, useLearnerId } from "@/hooks/useLearnerId";
-import { button, colour, panel, space, type } from "@/lib/design/tokens";
+import type { AnsweredQuestion } from "@/components/gap-analysis";
+import { CenteredState, Loading, Notice, StepProgress } from "@/components/ui/primitives";
+import { writeLastQuizSession } from "@/hooks/useLastQuizSession";
+import { learnerFetch, useLearnerId } from "@/hooks/useLearnerId";
+import { button, colour, space, type } from "@/lib/design/tokens";
 
 /**
- * Quiz — a six-question adaptive session, one question on screen at a time.
+ * The check — six questions, one at a time, nothing else on screen.
  *
  * The client holds no engine logic: it asks for the next item, submits an
  * answer, and renders what comes back. Which item is served and how the
- * difficulty moves are decided server-side by the deterministic engine.
+ * difficulty moves are decided server-side.
+ *
+ * It does keep a record of this session's answers — Topic, level, correctness —
+ * which the results view reads to say *what kind* of gap each weak Topic is.
+ * That is presentation over the Learner's own answers; no score is recomputed.
  */
 
 type Phase =
   | { name: "loading" }
   | { name: "question"; item: QuizItemView; index: number; length: number }
-  | { name: "feedback"; item: QuizItemView; index: number; length: number; feedback: FeedbackView }
+  | {
+      name: "feedback";
+      item: QuizItemView;
+      index: number;
+      length: number;
+      feedback: FeedbackView;
+    }
   | { name: "report"; report: ReportView }
   | { name: "error"; code: string; message: string };
 
@@ -39,6 +53,7 @@ export default function QuizPage({
   const [phase, setPhase] = useState<Phase>({ name: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [answers, setAnswers] = useState<AnsweredQuestion[]>([]);
   const started = useRef(false);
 
   const fail = (body: unknown, fallback: string) => {
@@ -54,9 +69,10 @@ export default function QuizPage({
     async (quizId: string) => {
       if (!learnerId) return;
 
-      const response = await fetch(
+      const response = await learnerFetch(
+        sessionId,
+        learnerId,
         `/api/sessions/${sessionId}/quiz-sessions/${quizId}/next`,
-        { headers: learnerHeaders(learnerId) },
       );
       const body = await response.json();
 
@@ -66,9 +82,10 @@ export default function QuizPage({
       }
 
       if (body.done) {
-        const reportResponse = await fetch(
+        const reportResponse = await learnerFetch(
+          sessionId,
+          learnerId,
           `/api/sessions/${sessionId}/reports/${quizId}`,
-          { headers: learnerHeaders(learnerId) },
         );
         const reportBody = await reportResponse.json();
 
@@ -77,6 +94,8 @@ export default function QuizPage({
           return;
         }
 
+        // Remembered so the recap can mark what did not hold up.
+        writeLastQuizSession(sessionId, quizId);
         setPhase({ name: "report", report: reportBody as ReportView });
         return;
       }
@@ -92,18 +111,18 @@ export default function QuizPage({
     [learnerId, sessionId],
   );
 
-  // The view opens in its loading state and the session is started once, so no
-  // state is set synchronously from the effect — every update follows an await.
   useEffect(() => {
     if (!ready || !learnerId || started.current) return;
     started.current = true;
 
     void (async () => {
       try {
-        const response = await fetch(`/api/sessions/${sessionId}/quiz-sessions`, {
-          method: "POST",
-          headers: learnerHeaders(learnerId),
-        });
+        const response = await learnerFetch(
+          sessionId,
+          learnerId,
+          `/api/sessions/${sessionId}/quiz-sessions`,
+          { method: "POST" },
+        );
         const body = await response.json();
 
         if (!response.ok) {
@@ -129,11 +148,12 @@ export default function QuizPage({
     setBusy(true);
 
     try {
-      const response = await fetch(
+      const response = await learnerFetch(
+        sessionId,
+        learnerId,
         `/api/sessions/${sessionId}/quiz-sessions/${quizSessionId}/responses`,
         {
           method: "POST",
-          headers: learnerHeaders(learnerId),
           body: JSON.stringify({ quizItemId: phase.item.id, optionId: selected }),
         },
       );
@@ -144,15 +164,30 @@ export default function QuizPage({
         return;
       }
 
+      const feedback = body as FeedbackView;
+
+      setAnswers((previous) => [
+        ...previous,
+        {
+          topicName: phase.item.topicName,
+          difficulty: phase.item.difficulty,
+          isCorrect: feedback.isCorrect,
+        },
+      ]);
+
       setPhase({
         name: "feedback",
         item: phase.item,
         index: phase.index,
         length: phase.length,
-        feedback: body as FeedbackView,
+        feedback,
       });
     } catch {
-      setPhase({ name: "error", code: "INTERNAL", message: "Could not reach ClassMind." });
+      setPhase({
+        name: "error",
+        code: "INTERNAL",
+        message: "Could not reach ClassMind.",
+      });
     } finally {
       setBusy(false);
     }
@@ -160,12 +195,19 @@ export default function QuizPage({
 
   if (ready && !learnerId) {
     return (
-      <section style={panel}>
-        <h1 style={{ ...type.title, marginTop: 0 }}>Join the class first</h1>
-        <Link href="/" style={{ ...button.primary, textDecoration: "none" }}>
-          Go to join page
-        </Link>
-      </section>
+      <CenteredState>
+        <Notice
+          tone="primary"
+          title="Join the class first"
+          action={
+            <Link href="/" style={button.primary}>
+              Go to join page
+            </Link>
+          }
+        >
+          The check is personal to you, so you need to join before it can start.
+        </Notice>
+      </CenteredState>
     );
   }
 
@@ -173,49 +215,65 @@ export default function QuizPage({
     const poolMissing = phase.code === "POOL_UNAVAILABLE";
 
     return (
-      <section style={panel} role="alert">
-        <h1 style={{ ...type.title, marginTop: 0 }}>
-          {poolMissing ? "The quiz is not available" : "Something went wrong"}
-        </h1>
-        <p style={{ ...type.body, color: colour.muted }}>{phase.message}</p>
-        <Link
-          href={`/class/${sessionId}/recap`}
-          style={{ ...button.primary, textDecoration: "none" }}
+      <CenteredState>
+        <Notice
+          tone={poolMissing ? "attention" : "weak"}
+          title={poolMissing ? "No questions for this class yet" : "Something went wrong"}
+          action={
+            <Link href={`/class/${sessionId}/recap`} style={button.primary}>
+              Go to my recap
+            </Link>
+          }
         >
-          Go to my recap
-        </Link>
-      </section>
+          {phase.message}
+        </Notice>
+      </CenteredState>
     );
   }
 
   if (phase.name === "report") {
-    return <UnderstandingReport report={phase.report} sessionId={sessionId} />;
+    return (
+      <UnderstandingReport
+        report={phase.report}
+        sessionId={sessionId}
+        answers={answers}
+      />
+    );
   }
 
   if (phase.name === "loading") {
-    return <p style={{ ...type.body, color: colour.muted }}>Loading your quiz…</p>;
+    return <Loading label="Preparing your check…" lines={4} />;
   }
 
   return (
-    <div style={{ display: "grid", gap: space.md }}>
-      <div
-        aria-hidden
-        style={{
-          display: "flex",
-          gap: space.xs,
-        }}
-      >
-        {Array.from({ length: phase.length }, (_, i) => (
+    <div style={{ display: "grid", gap: space.lg, maxWidth: "760px" }}>
+      <div style={{ display: "grid", gap: space.md }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <span
-            key={i}
             style={{
-              flex: 1,
-              height: "4px",
-              borderRadius: "2px",
-              background: i < phase.index ? colour.accent : colour.border,
+              ...type.label,
+              color: colour.subtle,
+              display: "flex",
+              gap: space.sm,
             }}
-          />
-        ))}
+          >
+            <span style={{ color: colour.primaryInk }}>{phase.item.topicName}</span>
+            <span aria-hidden>·</span>
+            <span>
+              Question {phase.index} of {phase.length}
+            </span>
+          </span>
+
+          <DifficultyPill level={phase.item.difficulty} />
+        </div>
+
+        <StepProgress current={phase.index} total={phase.length} />
       </div>
 
       <QuizItemCard

@@ -1,14 +1,15 @@
 "use client";
 
-import { button, colour, panel, radius, space, type } from "@/lib/design/tokens";
+import { Badge, Card } from "@/components/ui/primitives";
+import { button, colour, radius, space, type } from "@/lib/design/tokens";
 import type { SourceRef } from "@/lib/types";
 
 /**
- * One Quiz_Item: a keyboard-operable radio group of four Answer_Options, and the
- * feedback shown once it has been answered.
+ * One question.
  *
- * The card never receives correctness information until the answer is submitted
- * — the served item carries option text only.
+ * The card carries the question, four answers and nothing else. Correctness
+ * only exists here after an answer is submitted, because the served item never
+ * contains it.
  */
 
 export interface QuizOptionView {
@@ -40,20 +41,7 @@ const DIFFICULTY_LABEL: Record<1 | 2 | 3, string> = {
 };
 
 export function DifficultyPill({ level }: { level: 1 | 2 | 3 }) {
-  return (
-    <span
-      style={{
-        ...type.small,
-        padding: `2px ${space.sm}`,
-        borderRadius: radius.sm,
-        background: colour.canvas,
-        color: colour.muted,
-        border: `1px solid ${colour.border}`,
-      }}
-    >
-      {DIFFICULTY_LABEL[level]}
-    </span>
-  );
+  return <Badge>{DIFFICULTY_LABEL[level]}</Badge>;
 }
 
 export default function QuizItemCard({
@@ -78,28 +66,23 @@ export default function QuizItemCard({
   const answered = feedback !== null;
 
   return (
-    <section style={panel}>
-      <div
+    <Card style={{ padding: space.xxl }}>
+      <h1
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: space.md,
+          ...type.pageTitle,
+          fontSize: "22px",
+          margin: `0 0 ${space.xxl}`,
+          maxWidth: "58ch",
         }}
       >
-        <span style={{ ...type.small, color: colour.muted }}>
-          Question {index} of {length} · {item.topicName}
-        </span>
-        <DifficultyPill level={item.difficulty} />
-      </div>
-
-      <h2 style={{ ...type.title, margin: `0 0 ${space.lg}` }}>{item.stem}</h2>
+        {item.stem}
+      </h1>
 
       <fieldset
-        style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: space.sm }}
+        style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: space.md }}
       >
         <legend style={{ position: "absolute", left: "-9999px" }}>
-          Answer options for question {index}
+          Answer options for question {index} of {length}
         </legend>
 
         {item.options.map((option) => {
@@ -107,34 +90,44 @@ export default function QuizItemCard({
           const isCorrectOption = feedback?.correctOptionId === option.id;
           const isWrongChoice = answered && isChosen && !feedback.isCorrect;
 
-          const border = isCorrectOption
-            ? colour.positive
+          const accent = isCorrectOption
+            ? colour.strong
             : isWrongChoice
-              ? colour.negative
+              ? colour.weak
               : isChosen
-                ? colour.accent
+                ? colour.primary
                 : colour.border;
 
           const background = isCorrectOption
-            ? colour.positiveSoft
+            ? colour.strongSoft
             : isWrongChoice
-              ? colour.negativeSoft
+              ? colour.weakSoft
               : isChosen
-                ? colour.accentSoft
+                ? colour.primarySoft
                 : colour.surface;
+
+          const markColour = isCorrectOption
+            ? colour.strongInk
+            : isWrongChoice
+              ? colour.weakInk
+              : isChosen
+                ? colour.primaryInk
+                : colour.subtle;
 
           return (
             <label
               key={option.id}
               style={{
+                position: "relative",
                 display: "flex",
-                gap: space.sm,
+                gap: space.lg,
                 alignItems: "flex-start",
-                padding: space.md,
-                border: `1px solid ${border}`,
+                padding: space.lg,
+                border: `1.5px solid ${accent}`,
                 background,
-                borderRadius: radius.sm,
+                borderRadius: radius.lg,
                 cursor: answered ? "default" : "pointer",
+                transition: "border-color 120ms ease, background 120ms ease",
               }}
             >
               <input
@@ -144,9 +137,35 @@ export default function QuizItemCard({
                 checked={isChosen}
                 disabled={answered || busy}
                 onChange={() => onSelect(option.id)}
-                style={{ marginTop: "3px" }}
+                style={{
+                  position: "absolute",
+                  opacity: 0,
+                  width: "1px",
+                  height: "1px",
+                  margin: "-1px",
+                }}
               />
-              <span style={{ ...type.body }}>{option.text}</span>
+
+              <span
+                aria-hidden
+                style={{
+                  ...type.small,
+                  fontWeight: 680,
+                  minWidth: "26px",
+                  height: "26px",
+                  borderRadius: radius.pill,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: `1.5px solid ${accent}`,
+                  color: markColour,
+                  background: colour.surface,
+                }}
+              >
+                {option.id.toUpperCase()}
+              </span>
+
+              <span style={{ ...type.body, paddingTop: "2px" }}>{option.text}</span>
             </label>
           );
         })}
@@ -159,13 +178,14 @@ export default function QuizItemCard({
           disabled={selected === null || busy}
           style={{
             ...button.primary,
-            marginTop: space.lg,
-            opacity: selected === null || busy ? 0.5 : 1,
+            marginTop: space.xxl,
+            opacity: selected === null || busy ? 0.45 : 1,
+            cursor: selected === null || busy ? "not-allowed" : "pointer",
           }}
         >
           {busy ? "Checking…" : "Submit answer"}
         </button>
       ) : null}
-    </section>
+    </Card>
   );
 }

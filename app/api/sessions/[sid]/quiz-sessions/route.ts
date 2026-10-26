@@ -5,6 +5,7 @@ import { initialState } from "@/lib/domain/difficulty";
 import { requireLearner } from "@/lib/http/auth";
 import { AppError } from "@/lib/http/errors";
 import { pipeline, readParams } from "@/lib/http/pipeline";
+import { enforceRateLimit, LIMITS } from "@/lib/http/rate-limit";
 import { getMaterial } from "@/lib/repo/material";
 import { listQuizItems } from "@/lib/repo/pool";
 import { createQuizSession } from "@/lib/repo/quiz";
@@ -26,7 +27,10 @@ export async function POST(
   context: { params: Promise<{ sid: string }> },
 ) {
   return pipeline(request)
-    .parse(() => readParams(context))
+    .parse(async () => {
+      await enforceRateLimit(request, LIMITS.quiz);
+      return readParams(context);
+    })
     .authorise(async (params) => ({
       params,
       learnerId: await requireLearner(request, params.sid),

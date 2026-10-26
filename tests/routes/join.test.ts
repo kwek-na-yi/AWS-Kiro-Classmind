@@ -18,6 +18,7 @@ const material = vi.hoisted(() => ({
 
 vi.mock("@/lib/repo/session", () => session);
 vi.mock("@/lib/repo/material", () => material);
+vi.mock("@/lib/demo/bootstrap", () => ({ ensureDemoData: vi.fn(async () => {}) }));
 
 const { POST } = await import("@/app/api/sessions/join/route");
 

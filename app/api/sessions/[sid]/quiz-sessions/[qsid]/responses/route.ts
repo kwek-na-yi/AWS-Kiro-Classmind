@@ -34,11 +34,15 @@ export async function POST(
       learnerId: await requireLearner(request, input.params.sid),
     }))
     .read(async (input) => {
-      const quizSession = await getQuizSession(
-        input.params.sid,
-        input.learnerId,
-        input.params.qsid,
-      );
+      // Two rounds rather than four. This call sits between the Learner
+      // pressing "submit" and seeing whether they were right, so every
+      // sequential read that could have run alongside another is time they
+      // spend watching a disabled button.
+      const [quizSession, session, responses] = await Promise.all([
+        getQuizSession(input.params.sid, input.learnerId, input.params.qsid),
+        getSession(input.params.sid),
+        listSessionResponses(input.params.sid, input.params.qsid),
+      ]);
 
       if (!quizSession) {
         throw new AppError(
@@ -47,7 +51,6 @@ export async function POST(
         );
       }
 
-      const session = await getSession(input.params.sid);
       if (!session) {
         throw new AppError("SESSION_NOT_FOUND", "This class session was not found.");
       }
@@ -55,6 +58,7 @@ export async function POST(
       const quizItemId = String(input.body.quizItemId ?? "");
       const optionId = String(input.body.optionId ?? "");
 
+      // Needs the material version, so it cannot join the round above.
       const item = await findQuizItemById(
         input.params.sid,
         session.materialVersion,
@@ -70,9 +74,25 @@ export async function POST(
         throw new AppError("SESSION_NOT_FOUND", "That answer option is not on this question.");
       }
 
-      const responses = await listSessionResponses(input.params.sid, input.params.qsid);
+      // An answer already recorded for this item stands, whatever was sent now.
+      const prior = responses.find((response) => response.quizItemId === item.quizItemId);
 
-      return { ...input, session, quizSession, item, chosen, responses };
+      if (!prior) {
+        // Only the questions this session actually served can be answered.
+        // Otherwise a client could answer around the adaptive engine — the
+        // difficulty fold assumes each response followed a served item.
+        if (!quizSession.servedItemIds.includes(item.quizItemId)) {
+          throw new AppError("SESSION_NOT_FOUND", "That question has not been served in this quiz.");
+        }
+
+        // A closed session takes no further answers: a seventh response would
+        // otherwise be recorded and the report rebuilt from it.
+        if (quizSession.status === "closed" || responses.length >= quizSession.length) {
+          throw new AppError("QUIZ_CLOSED", "This quiz is already finished. Start a new one to try again.");
+        }
+      }
+
+      return { ...input, session, quizSession, item, chosen, responses, prior };
     })
     .compute((state) => {
       const engine = replay(state.responses);
@@ -87,6 +107,12 @@ export async function POST(
       };
     })
     .write(async (state) => {
+      // A repeat of an answered question: nothing is written, and the feedback
+      // below describes the answer that was recorded the first time.
+      if (state.prior) {
+        return { ...state, duplicate: true, recorded: state.prior, allResponses: state.responses };
+      }
+
       const response: QuizResponse = {
         quizSessionId: state.params.qsid,
         seq: state.seq,
@@ -109,11 +135,22 @@ export async function POST(
         close: state.closes,
       });
 
-      // First write wins: a duplicate submission for the same Quiz_Item keeps
-      // the answer already recorded.
+      // First write wins: a concurrent submission for the same Quiz_Item got
+      // there first, and its answer is the one that stands.
       if (!written) {
         const responses = await listSessionResponses(state.params.sid, state.params.qsid);
-        return { ...state, duplicate: true, allResponses: responses };
+        const recorded = responses.find((entry) => entry.quizItemId === state.item.quizItemId);
+
+        // The write was refused for a different item taking this sequence
+        // number at the same moment — nothing about this answer was recorded.
+        if (!recorded) {
+          throw new AppError(
+            "ANSWER_CONFLICT",
+            "Another answer was being recorded at the same time. Reload the quiz to continue.",
+          );
+        }
+
+        return { ...state, duplicate: true, recorded, allResponses: responses };
       }
 
       const allResponses = [...state.responses, response];
@@ -134,17 +171,20 @@ export async function POST(
         });
       }
 
-      return { ...state, duplicate: false, allResponses };
+      return { ...state, duplicate: false, recorded: response, allResponses };
     })
     .project((state) => {
       const correct = state.item.options.find((option) => option.isCorrect);
 
       return {
-        isCorrect: state.chosen.isCorrect,
+        // The recorded answer, not necessarily the one in this request: on a
+        // duplicate they can differ, and the feedback must match the score.
+        isCorrect: state.recorded.isCorrect,
         correctOptionId: correct?.optionId ?? null,
         correctOptionText: correct?.text ?? null,
         sourceRef: state.item.sourceRef,
-        nextDifficulty: state.advanced.difficulty,
+        // A fold over what is persisted, so a duplicate reports the real state.
+        nextDifficulty: replay(state.allResponses).difficulty,
         index: state.allResponses.length,
         length: state.quizSession.length,
         closed: state.allResponses.length >= state.quizSession.length,

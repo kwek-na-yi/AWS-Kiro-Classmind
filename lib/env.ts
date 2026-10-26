@@ -1,33 +1,82 @@
 import "server-only";
 
+import { deploymentTarget } from "@/lib/target";
+
 /**
- * Server-only environment configuration.
+ * Server-only environment configuration for the optional AWS adapter.
  *
- * Every value the application needs from the environment is read and validated
- * here, so a missing variable surfaces as one named error listing exactly what
- * is absent, rather than as an opaque AWS error deep in a request.
+ * The default local mode reads none of this: a fresh clone needs no
+ * environment variables at all. These values are only read, and only
+ * validated, when `CLASSMIND_TARGET` selects a DynamoDB-backed target — so a
+ * missing variable surfaces as one named error listing exactly what is absent
+ * rather than as an opaque AWS error deep in a request.
  *
  * No variable is prefixed `NEXT_PUBLIC_`: none of these values may reach the
- * browser. Credentials are never read here at all — the AWS SDK resolves them
- * from the standard provider chain (the local AWS profile in development, the
- * hosting role in deployment), so no key material is ever checked in.
+ * browser. Credentials are never read here — the AWS SDK resolves them from the
+ * standard provider chain — so no key material is ever checked in.
  *
- * Validation is memoised on first use rather than executed at module load: a
- * build machine has no AWS configuration, and a build must not require one.
- * The first request that touches AWS pays the check, and it fails loudly.
+ * Validation is memoised on first use rather than executed at module load, so
+ * a build never requires any of it.
  */
 
-/** The variables the application requires to serve a request. */
-const REQUIRED_VARS = [
-  "AWS_REGION",
-  "CLASSMIND_TABLE",
-  "CLASSMIND_BUCKET",
-  "APP_ORIGIN",
-] as const;
+/** The variables a target needs before its first request. */
+const REQUIRED_BY_TARGET = {
+  local: [],
+  // Reads DATABASE_URL itself (lib/store/pg.ts); needs nothing from AWS.
+  postgres: [],
+  "dynamodb-local": ["CLASSMIND_TABLE"],
+  aws: ["AWS_REGION", "CLASSMIND_TABLE", "CLASSMIND_BUCKET"],
+} as const;
 
-type RequiredVar = (typeof REQUIRED_VARS)[number];
+export interface Env {
+  readonly AWS_REGION: string;
+  readonly CLASSMIND_TABLE: string;
+  readonly CLASSMIND_BUCKET: string;
+}
 
-export type Env = Readonly<Record<RequiredVar, string>>;
+/** Defaults for the variables a target does not require. */
+const DEFAULTS: Env = {
+  AWS_REGION: "us-east-1",
+  CLASSMIND_TABLE: "classmind",
+  CLASSMIND_BUCKET: "",
+};
+
+/** The DynamoDB Local endpoint, used only by the `dynamodb-local` target. */
+export function dynamoEndpoint(): string | undefined {
+  if (deploymentTarget() !== "dynamodb-local") return undefined;
+  return process.env.DYNAMODB_ENDPOINT?.trim() || "http://localhost:8000";
+}
+
+/**
+ * The shape of a real AWS access key id: uppercase alphanumerics, at least 16
+ * of them. `AKIA…` for a long-lived key, `ASIA…` for a session credential.
+ */
+const ACCESS_KEY_ID_PATTERN = /^[A-Z0-9]{16,128}$/;
+
+/**
+ * Refuses to run against AWS with placeholder credentials in the environment.
+ *
+ * `next dev` loads `.env.local` on every run, and the SDK's environment
+ * provider outranks `~/.aws/credentials` — so a placeholder such as
+ * `AWS_ACCESS_KEY_ID=local` left in an env file silently becomes the
+ * credential every real request is signed with. This makes that fail with the
+ * sentence that fixes it, rather than as an opaque 500 per request.
+ */
+export function assertUsableAwsCredentials(): void {
+  const keyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+
+  // Absent is fine and common: the SDK then reads ~/.aws/credentials or the
+  // hosting role, which is the documented way to run against AWS.
+  if (!keyId) return;
+
+  if (!ACCESS_KEY_ID_PATTERN.test(keyId)) {
+    throw new Error(
+      "AWS_ACCESS_KEY_ID is set to a placeholder rather than a real access key id, " +
+        "so every AWS request would be rejected. Remove the AWS_ACCESS_KEY_ID, " +
+        "AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN lines from your env file.",
+    );
+  }
+}
 
 /** Thrown when configuration is incomplete. Named so a caller can recognise it. */
 export class MissingEnvError extends Error {
@@ -35,8 +84,8 @@ export class MissingEnvError extends Error {
 
   constructor(missing: readonly string[]) {
     super(
-      `Missing required environment variable(s): ${missing.join(", ")}. ` +
-        "Copy .env.local.example to .env.local and fill them in.",
+      `Missing required environment variable(s) for CLASSMIND_TARGET=${deploymentTarget()}: ` +
+        `${missing.join(", ")}. See .env.aws.example — or unset CLASSMIND_TARGET to run locally.`,
     );
     this.name = "MissingEnvError";
     this.missing = missing;
@@ -45,25 +94,23 @@ export class MissingEnvError extends Error {
 
 let cached: Env | undefined;
 
-/** Reads and validates the environment, memoised for the life of the process. */
+/** Reads and validates the environment for the current target, memoised. */
 export function getEnv(): Env {
   if (cached) return cached;
 
+  const required: readonly string[] = REQUIRED_BY_TARGET[deploymentTarget()];
   const missing: string[] = [];
-  const resolved = {} as Record<RequiredVar, string>;
+  const resolved: Record<string, string> = { ...DEFAULTS };
 
-  for (const name of REQUIRED_VARS) {
+  for (const name of Object.keys(DEFAULTS)) {
     const value = process.env[name]?.trim();
-    if (!value) {
-      missing.push(name);
-      continue;
-    }
-    resolved[name] = value;
+    if (value) resolved[name] = value;
+    else if (required.includes(name)) missing.push(name);
   }
 
   if (missing.length > 0) throw new MissingEnvError(missing);
 
-  cached = Object.freeze(resolved);
+  cached = Object.freeze(resolved as unknown as Env);
   return cached;
 }
 
@@ -71,12 +118,3 @@ export function getEnv(): Env {
 export function resetEnvCache(): void {
   cached = undefined;
 }
-
-/**
- * Class_Session id prefix for local development.
- *
- * Local runs share the deployed table and bucket, so a developer's sessions are
- * created with this prefix and the demo Class_Session is never one of them. The
- * seed script writes the demo session without it.
- */
-export const DEV_SESSION_PREFIX = "dev-";

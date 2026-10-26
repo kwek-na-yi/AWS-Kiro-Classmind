@@ -153,7 +153,11 @@ function extractMarkdown(text: string): ExtractionResult {
     blocks.push({
       kind: "section",
       heading: heading ?? headingFromText(body),
-      text: heading === null ? body : `${heading}\n${body}`,
+      // A blank line after the heading, as markdown itself would write it. The
+      // heading is kept in the text so a search for the Topic name finds its own
+      // section, but it is a separate paragraph: joined to the line below, the
+      // pair reads as one run-on sentence that opens by naming its own Topic.
+      text: heading === null ? body : `${heading}\n\n${body}`,
     });
   };
 
